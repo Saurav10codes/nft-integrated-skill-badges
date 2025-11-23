@@ -1,20 +1,21 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { colors } from '../config/colors';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { colors } from "../config/colors";
 import {
   isFreighterInstalled,
   authenticateWithFreighter,
-  formatStellarAddress
-} from '../utils/freighter';
-import type { User } from '../config/supabase';
+  formatStellarAddress,
+} from "../utils/freighter";
+import type { User } from "../config/supabase";
 
 const Login = () => {
-  const [account, setAccount] = useState<string>('');
+  const [account, setAccount] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState<string>('');
-  const [freighterStatus, setFreighterStatus] = useState<string>('Checking...');
+  const [error, setError] = useState<string>("");
+  const [freighterStatus, setFreighterStatus] = useState<string>("Checking...");
   const navigate = useNavigate();
+  const [copySuccess, setCopySuccess] = useState<string>("");
 
   useEffect(() => {
     checkIfWalletIsConnected();
@@ -22,83 +23,95 @@ const Login = () => {
   }, []);
 
   const checkFreighterStatus = async () => {
-    console.log('🔍 Checking for Freighter wallet using official API...');
+    console.log("🔍 Checking for Freighter wallet using official API...");
 
     try {
       // Use the official Freighter API to check connection
       const installed = await isFreighterInstalled();
 
       if (installed) {
-        console.log('✅ Freighter is installed and detected!');
-        setFreighterStatus('Detected');
-        setError('');
+        console.log("✅ Freighter is installed and detected!");
+        setFreighterStatus("Detected");
+        setError("");
       } else {
-        console.log('❌ Freighter not found');
-        console.log('');
-        console.log('📋 INSTALLATION STEPS:');
-        console.log('1. Install Freighter from: https://www.freighter.app/');
-        console.log('2. Refresh this page after installation');
-        console.log('3. Make sure the extension is enabled in your browser');
-        console.log('');
-        setFreighterStatus('Not installed');
-        setError('Freighter wallet not detected. Please install it from freighter.app');
+        console.log("❌ Freighter not found");
+        console.log("");
+        console.log("📋 INSTALLATION STEPS:");
+        console.log("1. Install Freighter from: https://www.freighter.app/");
+        console.log("2. Refresh this page after installation");
+        console.log("3. Make sure the extension is enabled in your browser");
+        console.log("");
+        setFreighterStatus("Not installed");
+        setError(
+          "Freighter wallet not detected. Please install it from freighter.app"
+        );
       }
     } catch (error) {
-      console.error('Error checking Freighter status:', error);
-      setFreighterStatus('Not installed');
-      setError('Error checking Freighter. Please install it from freighter.app');
+      console.error("Error checking Freighter status:", error);
+      setFreighterStatus("Not installed");
+      setError(
+        "Error checking Freighter. Please install it from freighter.app"
+      );
     }
   };
 
   const checkIfWalletIsConnected = async () => {
     try {
-      const savedUser = localStorage.getItem('stellar_user');
-      const savedAddress = localStorage.getItem('stellar_wallet');
+      const savedUser = localStorage.getItem("stellar_user");
+      const savedAddress = localStorage.getItem("stellar_wallet");
 
       if (savedUser && savedAddress) {
         setAccount(savedAddress);
         setUser(JSON.parse(savedUser));
-        navigate('/dashboard');
+        navigate("/dashboard");
       }
     } catch (err) {
-      console.error('Error checking wallet connection:', err);
+      console.error("Error checking wallet connection:", err);
     }
   };
 
   const connectWallet = async () => {
     try {
       setLoading(true);
-      setError('');
+      setError("");
 
       // Check if Freighter is installed (with wait time)
       const installed = await isFreighterInstalled();
       if (!installed) {
-        setError('Please install Freighter wallet to continue. Visit https://www.freighter.app/');
+        setError(
+          "Please install Freighter wallet to continue. Visit https://www.freighter.app/"
+        );
         setLoading(false);
         return;
       }
 
       // Authenticate with Freighter
-      const { wallet_address, user: userData, isNewUser } = await authenticateWithFreighter();
+      const {
+        wallet_address,
+        user: userData,
+        isNewUser,
+      } = await authenticateWithFreighter();
 
       setAccount(wallet_address);
       setUser(userData);
 
       // Save to localStorage for persistence
-      localStorage.setItem('stellar_user', JSON.stringify(userData));
-      localStorage.setItem('stellar_wallet', wallet_address);
+      localStorage.setItem("stellar_user", JSON.stringify(userData));
+      localStorage.setItem("stellar_wallet", wallet_address);
 
       // Redirect to dashboard
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (err: any) {
-      console.error('Error connecting wallet:', err);
+      console.error("Error connecting wallet:", err);
 
-      if (err.message.includes('User declined')) {
-        setError('Connection request was rejected. Please try again.');
-      } else if (err.message.includes('not installed')) {
-        setError('Please install Freighter wallet from https://www.freighter.app/');
+      if (err.message.includes("User declined")) {
+        setError("Connection request was rejected. Please try again.");
+      } else if (err.message.includes("not installed")) {
+        setError(
+          "Please install Freighter wallet from https://www.freighter.app/"
+        );
       } else {
-        setError(err.message || 'Failed to connect wallet');
+        setError(err.message || "Failed to connect wallet");
       }
 
       cleanupLoginState();
@@ -108,10 +121,10 @@ const Login = () => {
   };
 
   const cleanupLoginState = () => {
-    setAccount('');
+    setAccount("");
     setUser(null);
-    localStorage.removeItem('stellar_user');
-    localStorage.removeItem('stellar_wallet');
+    localStorage.removeItem("stellar_user");
+    localStorage.removeItem("stellar_wallet");
   };
 
   const disconnectWallet = () => {
@@ -122,13 +135,45 @@ const Login = () => {
     return formatStellarAddress(address);
   };
 
+  const copyAddressToClipboard = async () => {
+    try {
+      if (!account) return;
+      await navigator.clipboard.writeText(account);
+      setCopySuccess("Copied!");
+      setTimeout(() => setCopySuccess(""), 1800);
+    } catch (err) {
+      setCopySuccess("Failed to copy");
+    }
+  };
+
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-center p-5"
-      style={{ background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)` }}
+      style={{
+        background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)`,
+      }}
     >
-      <div className="bg-white shadow-2xl p-10 max-w-lg w-full animate-fade-in" style={{ borderRadius: '8px' }}>
-        <h1 className="text-4xl font-bold text-center mb-3" style={{ color: colors.darkRed }}>
+      <div
+        className="bg-white shadow-2xl p-10 max-w-lg w-full animate-fade-in"
+        style={{ borderRadius: "8px" }}
+      >
+        <div className="flex items-center justify-center mb-4">
+          <svg
+            width="46"
+            height="46"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden
+          >
+            <rect width="24" height="24" rx="6" fill="#FFEFD5" />
+            <path d="M6 12L10 8L14 12L10 16L6 12Z" fill="#FF7A00" />
+          </svg>
+        </div>
+        <h1
+          className="text-3xl font-bold text-center mb-2"
+          style={{ color: colors.darkRed }}
+        >
           Stellar Skills
         </h1>
         <p className="text-center text-gray-600 mb-8 text-base">
@@ -139,12 +184,23 @@ const Login = () => {
         <div
           className="p-3 mb-4"
           style={{
-            backgroundColor: freighterStatus === 'Detected' ? colors.lightMint :
-                           freighterStatus === 'Not installed' ? colors.lightPink : colors.lightYellow,
-            borderRadius: '6px',
-            border: `1px solid ${freighterStatus === 'Detected' ? '#059669' :
-                                 freighterStatus === 'Not installed' ? colors.rose : colors.gold}`
+            backgroundColor:
+              freighterStatus === "Detected"
+                ? colors.lightMint
+                : freighterStatus === "Not installed"
+                ? colors.lightPink
+                : colors.lightYellow,
+            borderRadius: "6px",
+            border: `1px solid ${
+              freighterStatus === "Detected"
+                ? "#059669"
+                : freighterStatus === "Not installed"
+                ? colors.rose
+                : colors.gold
+            }`,
           }}
+          role="status"
+          aria-live="polite"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">
@@ -153,29 +209,34 @@ const Login = () => {
             <span
               className="text-sm font-bold"
               style={{
-                color: freighterStatus === 'Detected' ? '#059669' :
-                       freighterStatus === 'Not installed' ? colors.darkRed : colors.orange
+                color:
+                  freighterStatus === "Detected"
+                    ? "#059669"
+                    : freighterStatus === "Not installed"
+                    ? colors.darkRed
+                    : colors.orange,
               }}
             >
-              {freighterStatus === 'Detected' && '✅ Detected'}
-              {freighterStatus === 'Not installed' && '❌ Not Installed'}
-              {freighterStatus === 'Checking...' && '⏳ Checking...'}
-              {freighterStatus === 'Waiting for extension...' && '⏳ Loading...'}
+              {freighterStatus === "Detected" && "✅ Detected"}
+              {freighterStatus === "Not installed" && "❌ Not Installed"}
+              {freighterStatus === "Checking..." && "⏳ Checking..."}
+              {freighterStatus === "Waiting for extension..." &&
+                "⏳ Loading..."}
             </span>
           </div>
 
-          {freighterStatus === 'Not installed' && (
+          {freighterStatus === "Not installed" && (
             <button
               onClick={() => {
-                setFreighterStatus('Checking...');
+                setFreighterStatus("Checking...");
                 checkFreighterStatus();
               }}
               className="w-full text-sm font-semibold py-2 px-4 mt-2"
               style={{
                 backgroundColor: colors.blue,
-                color: 'white',
-                borderRadius: '4px',
-                border: 'none'
+                color: "white",
+                borderRadius: "4px",
+                border: "none",
               }}
             >
               🔄 Re-check for Freighter
@@ -190,8 +251,10 @@ const Login = () => {
               backgroundColor: colors.lightPink,
               borderColor: colors.rose,
               color: colors.darkRed,
-              borderRadius: '6px'
+              borderRadius: "6px",
             }}
+            role="alert"
+            aria-live="assertive"
           >
             <span>{error}</span>
           </div>
@@ -202,49 +265,88 @@ const Login = () => {
             className="w-full text-white font-semibold py-4 px-6 text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed mb-5"
             style={{
               background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
-              borderRadius: '6px'
+              borderRadius: "6px",
             }}
             onClick={connectWallet}
-            disabled={loading || freighterStatus !== 'Detected'}
+            disabled={loading || freighterStatus !== "Detected"}
           >
-            {loading ? 'Connecting...' :
-             freighterStatus !== 'Detected' ? 'Install Freighter First' :
-             'Connect Wallet'}
+            {loading
+              ? "Connecting..."
+              : freighterStatus !== "Detected"
+              ? "Install Freighter First"
+              : "Connect Wallet"}
           </button>
         ) : (
           <div className="mb-5">
-            <div 
+            <div
               className="p-5 mb-5"
-              style={{ backgroundColor: colors.cream, borderRadius: '6px' }}
+              style={{ backgroundColor: colors.cream, borderRadius: "6px" }}
             >
               <div className="flex justify-between py-2.5 border-b border-gray-200">
-                <span className="font-semibold text-gray-700">Connected Wallet:</span>
-                <span className="font-mono text-sm" style={{ color: colors.blue }}>{formatAddress(account)}</span>
+                <span className="font-semibold text-gray-700">
+                  Connected Wallet:
+                </span>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="font-mono text-sm"
+                    style={{ color: colors.blue }}
+                  >
+                    {formatAddress(account)}
+                  </span>
+                  <button
+                    onClick={copyAddressToClipboard}
+                    className="text-xs px-2 py-1 bg-white border rounded text-gray-700"
+                    aria-label="Copy full wallet address"
+                    title="Copy full wallet address"
+                  >
+                    Copy
+                  </button>
+                  {copySuccess && (
+                    <span className="text-xs text-green-600">
+                      {copySuccess}
+                    </span>
+                  )}
+                </div>
               </div>
               {user && (
                 <>
                   <div className="flex justify-between py-2.5 border-b border-gray-200">
-                    <span className="font-semibold text-gray-700">User ID:</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>{user.id}</span>
+                    <span className="font-semibold text-gray-700">
+                      User ID:
+                    </span>
+                    <span
+                      className="font-mono text-sm"
+                      style={{ color: colors.blue }}
+                    >
+                      {user.id}
+                    </span>
                   </div>
                   <div className="flex justify-between py-2.5 border-b border-gray-200">
                     <span className="font-semibold text-gray-700">Joined:</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
+                    <span
+                      className="font-mono text-sm"
+                      style={{ color: colors.blue }}
+                    >
                       {new Date(user.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="flex justify-between py-2.5">
-                    <span className="font-semibold text-gray-700">Last Login:</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
+                    <span className="font-semibold text-gray-700">
+                      Last Login:
+                    </span>
+                    <span
+                      className="font-mono text-sm"
+                      style={{ color: colors.blue }}
+                    >
                       {new Date(user.last_login).toLocaleString()}
                     </span>
                   </div>
                 </>
               )}
             </div>
-            <button 
+            <button
               className="w-full bg-gray-100 text-gray-700 font-semibold py-4 px-6 border border-gray-300 hover:bg-gray-200 hover:border-gray-400 transition-all duration-200"
-              style={{ borderRadius: '6px' }}
+              style={{ borderRadius: "6px" }}
               onClick={disconnectWallet}
             >
               Disconnect
@@ -257,18 +359,18 @@ const Login = () => {
           style={{
             backgroundColor: colors.lightYellow,
             borderColor: colors.gold,
-            color: '#854d0e',
-            borderRadius: '6px'
+            color: "#854d0e",
+            borderRadius: "6px",
           }}
         >
           <p className="m-0 leading-relaxed">
-            <strong className="text-gray-900">Note:</strong> Make sure you have Freighter wallet
-            extension installed in your browser. Download from{' '}
+            <strong className="text-gray-900">Note:</strong> Make sure you have
+            Freighter wallet extension installed in your browser. Download from{" "}
             <a
               href="https://www.freighter.app/"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: colors.blue, textDecoration: 'underline' }}
+              style={{ color: colors.blue, textDecoration: "underline" }}
             >
               freighter.app
             </a>
