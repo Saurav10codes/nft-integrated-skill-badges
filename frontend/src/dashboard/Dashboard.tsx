@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { colors } from '../config/colors';
+import EarnTab from './EarnTab';
+import BadgesTab from './BadgesTab';
+import CreateTestTab from './CreateTestTab';
+import MyTestsTab from './MyTestsTab';
 
 interface User {
   id: string;
@@ -9,7 +13,7 @@ interface User {
   last_login: string;
 }
 
-type MenuItem = 'profile' | 'earn';
+type MenuItem = 'profile' | 'earn' | 'badges' | 'mytests' | 'create';
 
 const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -77,19 +81,19 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: colors.cream }}>
-      {/* Sidebar */}
-      <aside 
-        className="w-64 shadow-lg flex flex-col"
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: colors.cream }}>
+      {/* Sidebar - Fixed */}
+      <aside
+        className="w-64 shadow-lg flex flex-col h-screen"
         style={{ backgroundColor: 'white', borderRight: `1px solid ${colors.lightBlue}` }}
       >
         {/* Logo/Brand */}
-        <div 
+        <div
           className="p-6 border-b"
           style={{ borderColor: colors.lightBlue }}
         >
           <h1 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            Stellar
+            Stellar Skills
           </h1>
           <p className="text-sm text-gray-500 mt-1">Dashboard</p>
         </div>
@@ -123,6 +127,48 @@ const Dashboard = () => {
           >
             Earn
           </button>
+
+          <button
+            onClick={() => setActiveMenu('badges')}
+            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
+              activeMenu === 'badges' ? 'shadow-md' : 'hover:shadow-sm'
+            }`}
+            style={{
+              backgroundColor: activeMenu === 'badges' ? colors.lightBlue : 'transparent',
+              color: activeMenu === 'badges' ? colors.blue : '#4B5563',
+              borderRadius: '6px'
+            }}
+          >
+            My Badges
+          </button>
+
+          <button
+            onClick={() => setActiveMenu('mytests')}
+            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
+              activeMenu === 'mytests' ? 'shadow-md' : 'hover:shadow-sm'
+            }`}
+            style={{
+              backgroundColor: activeMenu === 'mytests' ? colors.lightBlue : 'transparent',
+              color: activeMenu === 'mytests' ? colors.blue : '#4B5563',
+              borderRadius: '6px'
+            }}
+          >
+            My Tests
+          </button>
+
+          <button
+            onClick={() => setActiveMenu('create')}
+            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
+              activeMenu === 'create' ? 'shadow-md' : 'hover:shadow-sm'
+            }`}
+            style={{
+              backgroundColor: activeMenu === 'create' ? colors.lightBlue : 'transparent',
+              color: activeMenu === 'create' ? colors.blue : '#4B5563',
+              borderRadius: '6px'
+            }}
+          >
+            Create Test
+          </button>
         </nav>
 
         {/* User Info & Logout */}
@@ -153,25 +199,31 @@ const Dashboard = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        {/* Header */}
-        <header 
-          className="bg-white shadow-sm border-b p-6"
+      {/* Main Content - Scrollable */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header - Fixed */}
+        <header
+          className="bg-white shadow-sm border-b p-6 shrink-0"
           style={{ borderColor: colors.lightBlue }}
         >
           <h2 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            {activeMenu === 'profile' ? 'Profile' : 'Earn'}
+            {activeMenu === 'profile' && 'Profile'}
+            {activeMenu === 'earn' && 'Earn'}
+            {activeMenu === 'badges' && 'My Badges'}
+            {activeMenu === 'mytests' && 'My Tests'}
+            {activeMenu === 'create' && 'Create Test'}
           </h2>
           <p className="text-gray-600 mt-1">
-            {activeMenu === 'profile' 
-              ? 'Manage your account and view your information' 
-              : 'Earn rewards and complete tasks'}
+            {activeMenu === 'profile' && 'Manage your account and view your information'}
+            {activeMenu === 'earn' && 'Take tests and earn NFT badges'}
+            {activeMenu === 'badges' && 'View your earned badges'}
+            {activeMenu === 'mytests' && 'Manage and view analytics for your created tests'}
+            {activeMenu === 'create' && 'Create a new skill test'}
           </p>
         </header>
 
-        {/* Content Area */}
-        <div className="p-6">
+        {/* Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
           {activeMenu === 'profile' && (
             <>
               {/* Welcome Section */}
@@ -258,7 +310,7 @@ const Dashboard = () => {
                   style={{ backgroundColor: colors.lightBlue, borderRadius: '8px' }}
                 >
                   <h4 className="text-sm font-semibold text-gray-500 mb-2">Network</h4>
-                  <p className="font-semibold text-lg" style={{ color: colors.blue }}>Ethereum</p>
+                  <p className="font-semibold text-lg" style={{ color: colors.blue }}>Stellar</p>
                 </div>
               </div>
 
@@ -294,29 +346,13 @@ const Dashboard = () => {
             </>
           )}
 
-          {activeMenu === 'earn' && (
-            <div 
-              className="bg-white shadow-md p-8 text-center"
-              style={{ borderRadius: '8px' }}
-            >
-              <h3 className="text-2xl font-bold mb-3" style={{ color: colors.darkRed }}>
-                Earn Section
-              </h3>
-              <p className="text-gray-600 mb-6">
-                This section is coming soon. Check back later for exciting earning opportunities!
-              </p>
-              <div 
-                className="inline-block px-6 py-3 font-medium"
-                style={{ 
-                  backgroundColor: colors.lightYellow, 
-                  color: colors.orange,
-                  borderRadius: '6px'
-                }}
-              >
-                Under Development
-              </div>
-            </div>
-          )}
+          {activeMenu === 'earn' && <EarnTab walletAddress={account} />}
+
+          {activeMenu === 'badges' && <BadgesTab walletAddress={account} />}
+
+          {activeMenu === 'mytests' && <MyTestsTab walletAddress={account} />}
+
+          {activeMenu === 'create' && <CreateTestTab walletAddress={account} />}
         </div>
       </main>
     </div>

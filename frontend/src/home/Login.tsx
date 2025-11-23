@@ -1,45 +1,64 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ethers } from 'ethers';
 import { colors } from '../config/colors';
-
-interface User {
-  id: string;
-  wallet_address: string;
-  created_at: string;
-  last_login: string;
-}
+import {
+  isFreighterInstalled,
+  authenticateWithFreighter,
+  formatStellarAddress
+} from '../utils/freighter';
+import type { User } from '../config/supabase';
 
 const Login = () => {
   const [account, setAccount] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string>('');
+  const [freighterStatus, setFreighterStatus] = useState<string>('Checking...');
   const navigate = useNavigate();
 
   useEffect(() => {
     checkIfWalletIsConnected();
+    checkFreighterStatus();
   }, []);
+
+  const checkFreighterStatus = async () => {
+    console.log('🔍 Checking for Freighter wallet using official API...');
+
+    try {
+      // Use the official Freighter API to check connection
+      const installed = await isFreighterInstalled();
+
+      if (installed) {
+        console.log('✅ Freighter is installed and detected!');
+        setFreighterStatus('Detected');
+        setError('');
+      } else {
+        console.log('❌ Freighter not found');
+        console.log('');
+        console.log('📋 INSTALLATION STEPS:');
+        console.log('1. Install Freighter from: https://www.freighter.app/');
+        console.log('2. Refresh this page after installation');
+        console.log('3. Make sure the extension is enabled in your browser');
+        console.log('');
+        setFreighterStatus('Not installed');
+        setError('Freighter wallet not detected. Please install it from freighter.app');
+      }
+    } catch (error) {
+      console.error('Error checking Freighter status:', error);
+      setFreighterStatus('Not installed');
+      setError('Error checking Freighter. Please install it from freighter.app');
+    }
+  };
 
   const checkIfWalletIsConnected = async () => {
     try {
-      if (!window.ethereum) {
-        setError('Please install MetaMask to use this feature');
-        return;
-      }
+      const savedUser = localStorage.getItem('stellar_user');
+      const savedAddress = localStorage.getItem('stellar_wallet');
 
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-      if (accounts.length > 0) {
-        // Only set account if user data exists in localStorage
-        const savedUser = localStorage.getItem('stellar_user');
-        const savedAddress = localStorage.getItem('stellar_wallet');
-        
-        if (savedUser && savedAddress && savedAddress.toLowerCase() === accounts[0].toLowerCase()) {
-          setAccount(accounts[0]);
-          setUser(JSON.parse(savedUser));
-          // Redirect to dashboard if already logged in
-          navigate('/dashboard');
-        }
+      if (savedUser && savedAddress) {
+        setAccount(savedAddress);
+        setUser(JSON.parse(savedUser));
+        navigate('/dashboard');
       }
     } catch (err) {
       console.error('Error checking wallet connection:', err);
@@ -51,74 +70,37 @@ const Login = () => {
       setLoading(true);
       setError('');
 
-      if (!window.ethereum) {
-        setError('Please install MetaMask to continue');
+      // Check if Freighter is installed (with wait time)
+      const installed = await isFreighterInstalled();
+      if (!installed) {
+        setError('Please install Freighter wallet to continue. Visit https://www.freighter.app/');
         setLoading(false);
         return;
       }
 
-      // Request account access
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts',
-      });
+      // Authenticate with Freighter
+      const { wallet_address, user: userData, isNewUser } = await authenticateWithFreighter();
 
-      const walletAddress = accounts[0];
-      setAccount(walletAddress);
+      setAccount(wallet_address);
+      setUser(userData);
 
-      // Create a message to sign
-      const message = `Sign this message to authenticate with your wallet.\nTimestamp: ${Date.now()}`;
+      // Save to localStorage for persistence
+      localStorage.setItem('stellar_user', JSON.stringify(userData));
+      localStorage.setItem('stellar_wallet', wallet_address);
 
-      // Request signature
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const signature = await signer.signMessage(message);
-
-      // Send to backend
-      const response = await fetch('http://localhost:3001/api/auth/wallet', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress,
-          signature,
-          message,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setUser(data.user);
-        // Save to localStorage for persistence
-        localStorage.setItem('stellar_user', JSON.stringify(data.user));
-        localStorage.setItem('stellar_wallet', walletAddress);
-        
-        // Redirect to dashboard
-        navigate('/dashboard');
-      } else {
-        setError(data.error || 'Authentication failed');
-        // Clean up on failure
-        cleanupLoginState();
-      }
+      // Redirect to dashboard
+      navigate('/dashboard');
     } catch (err: any) {
       console.error('Error connecting wallet:', err);
-      
-      // Handle specific MetaMask errors
-      if (err.code === 4001) {
-        // User rejected the request
+
+      if (err.message.includes('User declined')) {
         setError('Connection request was rejected. Please try again.');
-      } else if (err.code === -32002) {
-        // Request already pending
-        setError('Connection request already pending. Please check MetaMask.');
-      } else if (err.message && err.message.includes('user rejected')) {
-        // User rejected signing
-        setError('Signature request was rejected. Please try again.');
+      } else if (err.message.includes('not installed')) {
+        setError('Please install Freighter wallet from https://www.freighter.app/');
       } else {
         setError(err.message || 'Failed to connect wallet');
       }
-      
-      // Clean up state on any error
+
       cleanupLoginState();
     } finally {
       setLoading(false);
@@ -126,10 +108,8 @@ const Login = () => {
   };
 
   const cleanupLoginState = () => {
-    // Reset all state
     setAccount('');
     setUser(null);
-    // Clear localStorage
     localStorage.removeItem('stellar_user');
     localStorage.removeItem('stellar_wallet');
   };
@@ -139,7 +119,7 @@ const Login = () => {
   };
 
   const formatAddress = (address: string) => {
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    return formatStellarAddress(address);
   };
 
   return (
@@ -149,18 +129,66 @@ const Login = () => {
     >
       <div className="bg-white shadow-2xl p-10 max-w-lg w-full animate-fade-in" style={{ borderRadius: '8px' }}>
         <h1 className="text-4xl font-bold text-center mb-3" style={{ color: colors.darkRed }}>
-          Stellar Login
+          Stellar Skills
         </h1>
         <p className="text-center text-gray-600 mb-8 text-base">
-          Connect your wallet to get started
+          Connect your Freighter wallet to get started
         </p>
 
+        {/* Freighter Status Indicator */}
+        <div
+          className="p-3 mb-4"
+          style={{
+            backgroundColor: freighterStatus === 'Detected' ? colors.lightMint :
+                           freighterStatus === 'Not installed' ? colors.lightPink : colors.lightYellow,
+            borderRadius: '6px',
+            border: `1px solid ${freighterStatus === 'Detected' ? '#059669' :
+                                 freighterStatus === 'Not installed' ? colors.rose : colors.gold}`
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">
+              Freighter Status:
+            </span>
+            <span
+              className="text-sm font-bold"
+              style={{
+                color: freighterStatus === 'Detected' ? '#059669' :
+                       freighterStatus === 'Not installed' ? colors.darkRed : colors.orange
+              }}
+            >
+              {freighterStatus === 'Detected' && '✅ Detected'}
+              {freighterStatus === 'Not installed' && '❌ Not Installed'}
+              {freighterStatus === 'Checking...' && '⏳ Checking...'}
+              {freighterStatus === 'Waiting for extension...' && '⏳ Loading...'}
+            </span>
+          </div>
+
+          {freighterStatus === 'Not installed' && (
+            <button
+              onClick={() => {
+                setFreighterStatus('Checking...');
+                checkFreighterStatus();
+              }}
+              className="w-full text-sm font-semibold py-2 px-4 mt-2"
+              style={{
+                backgroundColor: colors.blue,
+                color: 'white',
+                borderRadius: '4px',
+                border: 'none'
+              }}
+            >
+              🔄 Re-check for Freighter
+            </button>
+          )}
+        </div>
+
         {error && (
-          <div 
+          <div
             className="border p-3 mb-5 flex items-center gap-2"
-            style={{ 
-              backgroundColor: colors.lightPink, 
-              borderColor: colors.rose, 
+            style={{
+              backgroundColor: colors.lightPink,
+              borderColor: colors.rose,
               color: colors.darkRed,
               borderRadius: '6px'
             }}
@@ -172,14 +200,16 @@ const Login = () => {
         {!account ? (
           <button
             className="w-full text-white font-semibold py-4 px-6 text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed mb-5"
-            style={{ 
+            style={{
               background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
               borderRadius: '6px'
             }}
             onClick={connectWallet}
-            disabled={loading}
+            disabled={loading || freighterStatus !== 'Detected'}
           >
-            {loading ? 'Connecting...' : 'Connect Wallet'}
+            {loading ? 'Connecting...' :
+             freighterStatus !== 'Detected' ? 'Install Freighter First' :
+             'Connect Wallet'}
           </button>
         ) : (
           <div className="mb-5">
@@ -222,18 +252,26 @@ const Login = () => {
           </div>
         )}
 
-        <div 
+        <div
           className="border-l-4 p-4"
-          style={{ 
-            backgroundColor: colors.lightYellow, 
-            borderColor: colors.gold, 
+          style={{
+            backgroundColor: colors.lightYellow,
+            borderColor: colors.gold,
             color: '#854d0e',
             borderRadius: '6px'
           }}
         >
           <p className="m-0 leading-relaxed">
-            <strong className="text-gray-900">Note:</strong> Make sure you have MetaMask or another Web3
-            wallet extension installed in your browser.
+            <strong className="text-gray-900">Note:</strong> Make sure you have Freighter wallet
+            extension installed in your browser. Download from{' '}
+            <a
+              href="https://www.freighter.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: colors.blue, textDecoration: 'underline' }}
+            >
+              freighter.app
+            </a>
           </p>
         </div>
       </div>
