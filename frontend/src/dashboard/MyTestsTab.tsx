@@ -484,7 +484,7 @@ const MyTestsTab = ({ walletAddress }: MyTestsTabProps) => {
                   onClick={() => fetchTestAnalytics(test)}
                   className="flex-1 text-white font-semibold py-3 px-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                    backgroundColor: colors.blue,
                     borderRadius: '6px'
                   }}
                 >
@@ -495,7 +495,7 @@ const MyTestsTab = ({ walletAddress }: MyTestsTabProps) => {
                   onClick={() => alert('Edit functionality coming soon!')}
                   className="flex-1 text-white font-semibold py-3 px-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+                    backgroundColor: colors.orange,
                     borderRadius: '6px'
                   }}
                 >

@@ -6,6 +6,7 @@ import BadgesTab from './BadgesTab';
 import CreateTestTab from './CreateTestTab';
 import MyTestsTab from './MyTestsTab';
 import TakeTestTab from './TakeTestTab';
+import ProfileTab from './ProfileTab';
 
 interface User {
   id: string;
@@ -110,7 +111,7 @@ const Dashboard = () => {
     return (
       <div 
         className="min-h-screen flex items-center justify-center"
-        style={{ background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)` }}
+        style={{ backgroundColor: colors.lightBlue }}
       >
         <div className="text-white text-xl">Loading...</div>
       </div>
@@ -126,13 +127,18 @@ const Dashboard = () => {
       >
         {/* Logo/Brand */}
         <div
-          className="p-6 border-b"
-          style={{ borderColor: colors.lightBlue }}
+          className="p-5 border-b flex items-center justify-center"
+          style={{ 
+            borderColor: colors.lightBlue,
+            height: '80px'
+          }}
         >
-          <h1 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            Stellar Skills
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Dashboard</p>
+          <div className="text-center">
+            <h1 className="text-xl font-bold" style={{ color: colors.darkRed }}>
+              Stellar Skills
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">Dashboard</p>
+          </div>
         </div>
 
         {/* Navigation Menu */}
@@ -227,7 +233,7 @@ const Dashboard = () => {
             onClick={handleLogout}
             className="w-full text-white px-4 py-3 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
             style={{ 
-              background: `linear-gradient(135deg, ${colors.darkRed} 0%, ${colors.rose} 100%)`,
+              backgroundColor: colors.rose,
               borderRadius: '6px'
             }}
           >
@@ -240,23 +246,29 @@ const Dashboard = () => {
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header - Fixed */}
         <header
-          className="bg-white shadow-sm border-b p-6 shrink-0"
-          style={{ borderColor: colors.lightBlue }}
+          className="bg-white shadow-sm border-b px-6 flex items-center shrink-0"
+          style={{ 
+            borderColor: colors.lightBlue,
+            height: '80px'
+          }}
         >
-          <h2 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            {activeMenu === 'profile' && 'Profile'}
-            {activeMenu === 'earn' && 'Earn'}
-            {activeMenu === 'badges' && 'My Badges'}
-            {activeMenu === 'mytests' && 'My Tests'}
-            {activeMenu === 'create' && 'Create Test'}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            {activeMenu === 'profile' && 'Manage your account and view your information'}
-            {activeMenu === 'earn' && 'Take tests and earn NFT badges'}
-            {activeMenu === 'badges' && 'View your earned badges'}
-            {activeMenu === 'mytests' && 'Manage and view analytics for your created tests'}
-            {activeMenu === 'create' && 'Create a new skill test'}
-          </p>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold whitespace-nowrap" style={{ color: colors.darkRed }}>
+              {activeMenu === 'profile' && 'Profile'}
+              {activeMenu === 'earn' && 'Earn'}
+              {activeMenu === 'badges' && 'My Badges'}
+              {activeMenu === 'mytests' && 'My Tests'}
+              {activeMenu === 'create' && 'Create Test'}
+            </h2>
+            <span className="text-gray-300 font-light text-xl" style={{ width: '2px' }}>|</span>
+            <p className="text-sm text-gray-500">
+              {activeMenu === 'profile' && 'Create and manage your custom badges'}
+              {activeMenu === 'earn' && 'Discover and take tests to earn badges'}
+              {activeMenu === 'badges' && 'View your earned NFT badges and achievements'}
+              {activeMenu === 'mytests' && 'Manage tests you have created'}
+              {activeMenu === 'create' && 'Design and publish new skill tests'}
+            </p>
+          </div>
         </header>
 
         {/* Content Area - Scrollable */}
@@ -278,24 +290,13 @@ const Dashboard = () => {
 
               {/* User Info Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {/* User ID Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.cream, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">User ID</h4>
-                  <p className="font-mono text-sm break-all" style={{ color: colors.blue }}>
-                    {user.id}
-                  </p>
-                </div>
-
                 {/* Wallet Address Card */}
                 <div 
                   className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightPink, borderRadius: '8px' }}
+                  style={{ backgroundColor: colors.lightBlue, borderRadius: '8px' }}
                 >
                   <h4 className="text-sm font-semibold text-gray-500 mb-2">Wallet Address</h4>
-                  <p className="font-mono text-sm break-all" style={{ color: colors.darkRed }}>
+                  <p className="font-mono text-xs break-all" style={{ color: colors.blue }}>
                     {user.wallet_address}
                   </p>
                 </div>
@@ -323,7 +324,6 @@ const Dashboard = () => {
                   <h4 className="text-sm font-semibold text-gray-500 mb-2">Last Login</h4>
                   <p className="font-mono text-sm" style={{ color: colors.darkRed }}>
                     {new Date(user.last_login).toLocaleString('en-US', {
-                      year: 'numeric',
                       month: 'short',
                       day: 'numeric',
                       hour: '2-digit',
@@ -331,55 +331,10 @@ const Dashboard = () => {
                     })}
                   </p>
                 </div>
-
-                {/* Account Status Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightMint, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Account Status</h4>
-                  <p className="font-semibold text-lg" style={{ color: '#059669' }}>Active</p>
-                </div>
-
-                {/* Network Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightBlue, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Network</h4>
-                  <p className="font-semibold text-lg" style={{ color: colors.blue }}>Stellar</p>
-                </div>
               </div>
 
-              {/* Account Details */}
-              <div 
-                className="bg-white shadow-md p-6"
-                style={{ borderRadius: '8px' }}
-              >
-                <h3 className="text-xl font-bold mb-4" style={{ color: colors.darkRed }}>
-                  Account Details
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between py-3 border-b" style={{ borderColor: colors.lightBlue }}>
-                    <span className="font-medium text-gray-700">Full Wallet Address</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {user.wallet_address}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-3 border-b" style={{ borderColor: colors.lightBlue }}>
-                    <span className="font-medium text-gray-700">User ID</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {user.id}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-3">
-                    <span className="font-medium text-gray-700">Account Created</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {new Date(user.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              {/* Custom Badges Section */}
+              <ProfileTab userId={user.id} />
             </>
           )}
 

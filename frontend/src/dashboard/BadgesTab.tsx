@@ -279,7 +279,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
             <div
               className="p-4 mb-4 flex items-center justify-between"
               style={{
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                backgroundColor: colors.blue,
                 borderRadius: '8px'
               }}
             >
@@ -327,7 +327,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
                 <div
                   className="h-40 flex items-center justify-center"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`
+                    backgroundColor: colors.blue
                   }}
                 >
                   <div className="text-white text-center">
@@ -385,7 +385,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
                     <button
                       className="w-full text-white font-semibold py-2 px-4 text-sm shadow-md hover:shadow-lg transition-all duration-200 mb-2"
                       style={{
-                        background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                        backgroundColor: colors.blue,
                         borderRadius: '6px'
                       }}
                       onClick={() => {
@@ -415,7 +415,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
                     <button
                       className="w-full text-white font-semibold py-2 px-4 text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                       style={{
-                        background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+                        backgroundColor: colors.orange,
                         borderRadius: '6px'
                       }}
                       onClick={() => onViewTest(badge.test_id)}
@@ -437,7 +437,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
                 <div
                   className="h-40 flex items-center justify-center"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.lightYellow} 100%)`
+                    backgroundColor: colors.orange
                   }}
                 >
                   <div className="text-white text-center">
@@ -491,7 +491,7 @@ const BadgesTab = ({ walletAddress, onViewTest }: BadgesTabProps) => {
                     <button
                       className="w-full text-white font-semibold py-2 px-4 text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                       style={{
-                        background: `linear-gradient(135deg, ${colors.rose} 0%, ${colors.pink} 100%)`,
+                        backgroundColor: colors.rose,
                         borderRadius: '6px'
                       }}
                       onClick={() => onViewTest(attempt.test_id)}

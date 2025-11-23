@@ -266,7 +266,7 @@ const Login = () => {
               disabled={loading || !username.trim()}
               className="w-full text-white font-semibold py-3 px-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+                backgroundColor: colors.orange,
                 borderRadius: "6px",
               }}
             >
@@ -280,7 +280,7 @@ const Login = () => {
       <div
         className="min-h-screen flex items-center justify-center p-5"
         style={{
-          background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)`,
+          backgroundColor: colors.lightBlue,
         }}
       >
       <div
@@ -394,7 +394,7 @@ const Login = () => {
           <button
             className="w-full text-white font-semibold py-4 px-6 text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed mb-5"
             style={{
-              background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+              backgroundColor: colors.orange,
               borderRadius: "6px",
             }}
             onClick={connectWallet}

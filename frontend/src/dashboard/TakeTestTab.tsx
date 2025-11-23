@@ -191,7 +191,21 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
 
       questions.forEach((question) => {
         totalScore += question.points;
-        if (answers[question.id] === question.correct_answer) {
+        
+        // Validate answer based on question type
+        let isCorrect = false;
+        const userAnswer = answers[question.id] || '';
+        
+        if (question.question_type === 'multiple_choice') {
+          isCorrect = userAnswer === question.correct_answer;
+        } else if (question.question_type === 'true_false') {
+          isCorrect = userAnswer.toLowerCase() === question.correct_answer.toLowerCase();
+        } else if (question.question_type === 'one_word') {
+          // Case-insensitive and trimmed comparison
+          isCorrect = userAnswer.toLowerCase().trim() === question.correct_answer.toLowerCase().trim();
+        }
+        
+        if (isCorrect) {
           score += question.points;
         }
       });
@@ -365,7 +379,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
           onClick={onBack}
           className="px-6 py-2 text-white font-semibold"
           style={{
-            background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+            backgroundColor: colors.blue,
             borderRadius: '6px'
           }}
         >
@@ -402,7 +416,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
           onClick={onBack}
           className="mt-4 px-6 py-2 text-white font-semibold"
           style={{
-            background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+            backgroundColor: colors.blue,
             borderRadius: '6px'
           }}
         >
@@ -536,7 +550,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
               onClick={onBack}
               className="flex-1 px-6 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200"
               style={{
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                backgroundColor: colors.blue,
                 borderRadius: '6px'
               }}
             >
@@ -634,7 +648,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
               className="h-2 transition-all duration-300"
               style={{
                 width: `${progress}%`,
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                backgroundColor: colors.blue,
                 borderRadius: '4px'
               }}
             />
@@ -667,40 +681,95 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
 
         {/* Options */}
         <div className="space-y-3">
-          {['A', 'B', 'C', 'D'].map((option) => {
-            const optionText = currentQuestion[`option_${option.toLowerCase()}` as keyof Question] as string;
-            const isSelected = answers[currentQuestion.id] === option;
+          {currentQuestion.question_type === 'multiple_choice' && (
+            <>
+              {[
+                { letter: 'A', text: currentQuestion.option_a },
+                { letter: 'B', text: currentQuestion.option_b },
+                ...(currentQuestion.num_options && currentQuestion.num_options >= 3 ? [{ letter: 'C', text: currentQuestion.option_c || '' }] : []),
+                ...(currentQuestion.num_options && currentQuestion.num_options === 4 ? [{ letter: 'D', text: currentQuestion.option_d || '' }] : [])
+              ].map((option) => {
+                const isSelected = answers[currentQuestion.id] === option.letter;
 
-            return (
-              <button
-                key={option}
-                onClick={() => handleAnswerSelect(currentQuestion.id, option)}
-                className={`w-full text-left p-4 border-2 transition-all duration-200 ${
-                  isSelected ? 'shadow-md' : 'hover:shadow-sm'
-                }`}
-                style={{
-                  borderColor: isSelected ? colors.blue : '#E5E7EB',
-                  backgroundColor: isSelected ? colors.lightBlue : 'white',
-                  borderRadius: '8px'
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center font-bold"
+                return (
+                  <button
+                    key={option.letter}
+                    onClick={() => handleAnswerSelect(currentQuestion.id, option.letter)}
+                    className={`w-full text-left p-4 border-2 transition-all duration-200 ${
+                      isSelected ? 'shadow-md' : 'hover:shadow-sm'
+                    }`}
                     style={{
-                      backgroundColor: isSelected ? colors.blue : '#F3F4F6',
-                      color: isSelected ? 'white' : '#6B7280'
+                      borderColor: isSelected ? colors.blue : '#E5E7EB',
+                      backgroundColor: isSelected ? colors.lightBlue : 'white',
+                      borderRadius: '8px'
                     }}
                   >
-                    {option}
-                  </div>
-                  <span className={isSelected ? 'font-semibold' : ''}>
-                    {optionText}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-bold"
+                        style={{
+                          backgroundColor: isSelected ? colors.blue : '#F3F4F6',
+                          color: isSelected ? 'white' : '#6B7280'
+                        }}
+                      >
+                        {option.letter}
+                      </div>
+                      <span className={isSelected ? 'font-semibold' : ''}>
+                        {option.text}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {currentQuestion.question_type === 'true_false' && (
+            <div className="flex gap-4">
+              {['true', 'false'].map((option) => {
+                const isSelected = answers[currentQuestion.id]?.toLowerCase() === option.toLowerCase();
+                const label = option.charAt(0).toUpperCase() + option.slice(1);
+
+                return (
+                  <button
+                    key={option}
+                    onClick={() => handleAnswerSelect(currentQuestion.id, label)}
+                    className={`flex-1 py-4 px-6 font-semibold border-2 transition-all duration-200 ${
+                      isSelected ? 'shadow-md' : 'hover:shadow-sm'
+                    }`}
+                    style={{
+                      borderColor: isSelected ? colors.blue : '#E5E7EB',
+                      backgroundColor: isSelected ? colors.lightBlue : 'white',
+                      borderRadius: '8px',
+                      color: isSelected ? colors.blue : '#6B7280'
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {currentQuestion.question_type === 'one_word' && (
+            <div>
+              <input
+                type="text"
+                value={answers[currentQuestion.id] || ''}
+                onChange={(e) => handleAnswerSelect(currentQuestion.id, e.target.value)}
+                placeholder="Type your answer here..."
+                className="w-full px-5 py-3 border-2 border-gray-300 focus:outline-none focus:border-2 transition-colors"
+                style={{
+                  borderRadius: '8px',
+                  ...(answers[currentQuestion.id] && {
+                    borderColor: colors.blue,
+                    backgroundColor: colors.lightBlue
+                  })
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-2">Answer is case-insensitive and spaces will be trimmed</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -727,7 +796,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
               disabled={submitting}
               className="px-8 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
               style={{
-                background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+                backgroundColor: colors.orange,
                 borderRadius: '6px'
               }}
             >
@@ -738,7 +807,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
               onClick={handleNextQuestion}
               className="px-6 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200"
               style={{
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+                backgroundColor: colors.blue,
                 borderRadius: '6px'
               }}
             >

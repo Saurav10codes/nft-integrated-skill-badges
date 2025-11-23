@@ -3,9 +3,7 @@
 
 import {
   isConnected,
-  isAllowed,
   requestAccess,
-  getAddress,
   getNetwork,
   signMessage as freighterSignMessage,
 } from '@stellar/freighter-api';
@@ -52,7 +50,11 @@ export const signMessageWithFreighter = async (message: string): Promise<string>
       throw new Error(result.error);
     }
 
-    return result.signedMessage;
+    const signedMessage = result.signedMessage;
+    if (typeof signedMessage === 'string') {
+      return signedMessage;
+    }
+    return '';
   } catch (error: any) {
     console.error('Error signing message:', error);
     throw new Error(error.message || 'Failed to sign message');
@@ -85,8 +87,8 @@ export const authenticateWithFreighter = async (): Promise<{
   // Create message to sign for authentication
   const message = `Sign this message to authenticate with Stellar Skill Badges.\nTimestamp: ${Date.now()}\nWallet: ${walletAddress}`;
 
-  // Sign the message
-  const signature = await signMessageWithFreighter(message);
+  // Sign the message (for authentication verification)
+  await signMessageWithFreighter(message);
 
   // Check if user exists in Supabase
   const { data: existingUser, error: fetchError } = await supabase
@@ -131,6 +133,47 @@ export const authenticateWithFreighter = async (): Promise<{
     .single();
 
   if (insertError) throw insertError;
+
+  // Create default badges for new user
+  if (newUser) {
+    console.log('Creating default badges for new user:', newUser.id);
+    
+    const defaultBadges = [
+      {
+        user_id: newUser.id,
+        badge_name: 'Bronze Badge',
+        svg_url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjgwIiBmaWxsPSIjQ0Q3RjMyIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI2MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGIiBzdHJva2Utd2lkdGg9IjMiLz48dGV4dCB4PSIxMDAiIHk9IjExMCIgZm9udC1zaXplPSIzMCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkI8L3RleHQ+PC9zdmc+',
+        is_default: true
+      },
+      {
+        user_id: newUser.id,
+        badge_name: 'Silver Badge',
+        svg_url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjgwIiBmaWxsPSIjQzBDMEMwIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI2MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGIiBzdHJva2Utd2lkdGg9IjMiLz48dGV4dCB4PSIxMDAiIHk9IjExMCIgZm9udC1zaXplPSIzMCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlM8L3RleHQ+PC9zdmc+',
+        is_default: true
+      },
+      {
+        user_id: newUser.id,
+        badge_name: 'Gold Badge',
+        svg_url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIHI9IjgwIiBmaWxsPSIjRkZENzAwIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI2MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRkZGIiBzdHJva2Utd2lkdGg9IjMiLz48dGV4dCB4PSIxMDAiIHk9IjExMCIgZm9udC1zaXplPSIzMCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNGRkYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkc8L3RleHQ+PC9zdmc+',
+        is_default: true
+      }
+    ];
+
+    try {
+      const { error: badgeError } = await supabase
+        .from('custom_badges')
+        .insert(defaultBadges);
+      
+      if (badgeError) {
+        console.error('Error creating default badges:', badgeError);
+        // Don't throw error here, just log it - user can still use the app
+      } else {
+        console.log('Default badges created successfully');
+      }
+    } catch (err) {
+      console.error('Exception creating default badges:', err);
+    }
+  }
 
   return {
     wallet_address: walletAddress,

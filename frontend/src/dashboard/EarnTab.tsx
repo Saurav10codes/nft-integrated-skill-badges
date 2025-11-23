@@ -392,11 +392,11 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
           <button
             className="w-full text-white font-semibold py-3 px-6 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              background: status === 'active'
-                ? `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`
+              backgroundColor: status === 'active'
+                ? colors.orange
                 : status === 'upcoming'
-                ? `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`
-                : `linear-gradient(135deg, ${colors.rose} 0%, ${colors.pink} 100%)`,
+                ? colors.blue
+                : colors.rose,
               borderRadius: '6px',
               cursor: 'pointer'
             }}
