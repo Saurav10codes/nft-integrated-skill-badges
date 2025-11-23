@@ -6,7 +6,7 @@ import {
   authenticateWithFreighter,
   formatStellarAddress,
 } from "../utils/freighter";
-import type { User } from "../config/supabase";
+import { supabase, type User } from "../config/supabase";
 
 const Login = () => {
   const [account, setAccount] = useState<string>("");
@@ -16,6 +16,9 @@ const Login = () => {
   const [freighterStatus, setFreighterStatus] = useState<string>("Checking...");
   const navigate = useNavigate();
   const [copySuccess, setCopySuccess] = useState<string>("");
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [username, setUsername] = useState("");
+  const [tempWalletData, setTempWalletData] = useState<any>(null);
 
   useEffect(() => {
     checkIfWalletIsConnected();
@@ -92,15 +95,16 @@ const Login = () => {
         isNewUser,
       } = await authenticateWithFreighter();
 
-      setAccount(wallet_address);
-      setUser(userData);
+      // If user has no username, show modal to set it
+      if (!userData.username) {
+        setTempWalletData({ wallet_address, user: userData, isNewUser });
+        setShowUsernameModal(true);
+        setLoading(false);
+        return;
+      }
 
-      // Save to localStorage for persistence
-      localStorage.setItem("stellar_user", JSON.stringify(userData));
-      localStorage.setItem("stellar_wallet", wallet_address);
-
-      // Redirect to dashboard
-      navigate("/dashboard");
+      // Complete login
+      completeLogin(wallet_address, userData);
     } catch (err: any) {
       console.error("Error connecting wallet:", err);
 
@@ -118,6 +122,59 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUsernameSubmit = async () => {
+    if (!username.trim()) {
+      setError("Username is required");
+      return;
+    }
+
+    if (username.length < 3) {
+      setError("Username must be at least 3 characters");
+      return;
+    }
+
+    if (username.length > 20) {
+      setError("Username must be less than 20 characters");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      // Update user with username
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update({ username: username.trim() })
+        .eq('wallet_address', tempWalletData.wallet_address)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Complete login with updated user data
+      setShowUsernameModal(false);
+      completeLogin(tempWalletData.wallet_address, updatedUser);
+    } catch (err: any) {
+      console.error("Error setting username:", err);
+      setError(err.message || "Failed to set username");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeLogin = (wallet_address: string, userData: User) => {
+    setAccount(wallet_address);
+    setUser(userData);
+
+    // Save to localStorage for persistence
+    localStorage.setItem("stellar_user", JSON.stringify(userData));
+    localStorage.setItem("stellar_wallet", wallet_address);
+
+    // Redirect to dashboard
+    navigate("/dashboard");
   };
 
   const cleanupLoginState = () => {
@@ -147,12 +204,85 @@ const Login = () => {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-5"
-      style={{
-        background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)`,
-      }}
-    >
+    <>
+      {/* Username Modal */}
+      {showUsernameModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              // Don't allow closing by clicking outside - username is required
+            }
+          }}
+        >
+          <div
+            className="bg-white shadow-2xl p-8 max-w-md w-full"
+            style={{ borderRadius: "8px" }}
+          >
+            <h2
+              className="text-2xl font-bold mb-4"
+              style={{ color: colors.darkRed }}
+            >
+              Choose Your Username
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Please enter a username to continue. This will be displayed on your profile and tests.
+            </p>
+
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter username..."
+              maxLength={20}
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-md mb-2 focus:outline-none focus:border-blue-500"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleUsernameSubmit();
+                }
+              }}
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 mb-4">
+              3-20 characters • Letters, numbers, and underscores
+            </p>
+
+            {error && (
+              <div
+                className="border p-3 mb-4"
+                style={{
+                  backgroundColor: colors.lightPink,
+                  borderColor: colors.rose,
+                  color: colors.darkRed,
+                  borderRadius: "6px",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleUsernameSubmit}
+              disabled={loading || !username.trim()}
+              className="w-full text-white font-semibold py-3 px-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
+                borderRadius: "6px",
+              }}
+            >
+              {loading ? "Setting Username..." : "Continue"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Login Page */}
+      <div
+        className="min-h-screen flex items-center justify-center p-5"
+        style={{
+          background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)`,
+        }}
+      >
       <div
         className="bg-white shadow-2xl p-10 max-w-lg w-full animate-fade-in"
         style={{ borderRadius: "8px" }}
@@ -310,6 +440,19 @@ const Login = () => {
               </div>
               {user && (
                 <>
+                  {user.username && (
+                    <div className="flex justify-between py-2.5 border-b border-gray-200">
+                      <span className="font-semibold text-gray-700">
+                        Username:
+                      </span>
+                      <span
+                        className="font-semibold text-sm"
+                        style={{ color: colors.orange }}
+                      >
+                        {user.username}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between py-2.5 border-b border-gray-200">
                     <span className="font-semibold text-gray-700">
                       User ID:
@@ -378,6 +521,7 @@ const Login = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
