@@ -1,25 +1,12 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
-import { ethers } from 'ethers';
 
 export const registerOrLoginUser = async (req: Request, res: Response) => {
   try {
-    const { walletAddress, signature, message } = req.body;
+    const { walletAddress } = req.body;
 
     if (!walletAddress) {
       return res.status(400).json({ error: 'Wallet address is required' });
-    }
-
-    // Verify signature if provided
-    if (signature && message) {
-      try {
-        const recoveredAddress = ethers.verifyMessage(message, signature);
-        if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
-          return res.status(401).json({ error: 'Invalid signature' });
-        }
-      } catch (error) {
-        return res.status(401).json({ error: 'Signature verification failed' });
-      }
     }
 
     // Check if user exists

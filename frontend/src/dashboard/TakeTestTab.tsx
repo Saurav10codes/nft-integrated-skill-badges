@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { colors } from '../config/colors';
 import { supabase, type Test, type Question } from '../config/supabase';
-import { generateBadgeMetadataUri, mintBadgeNFT } from '../utils/sorobanSimple';
+import { mintNFTOnBlockchain } from '../utils/realBlockchain';
+import { Card, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { getContractExplorerUrl, formatContractAddress } from '../utils/sorobanSimple';
 
 interface TakeTestTabProps {
   testId: string;
@@ -175,6 +178,12 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
   };
 
   const handleSubmitTest = async (autoSubmit: boolean = false) => {
+    // Prevent duplicate submissions
+    if (submitting || result) {
+      console.log('Submission already in progress or completed, skipping');
+      return;
+    }
+
     if (!autoSubmit && Object.keys(answers).length < questions.length) {
       const unanswered = questions.length - Object.keys(answers).length;
       if (!confirm(`You have ${unanswered} unanswered question(s). Do you want to submit anyway?`)) {
@@ -191,31 +200,42 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
 
       questions.forEach((question) => {
         totalScore += question.points;
-        if (answers[question.id] === question.correct_answer) {
+        
+        // Validate answer based on question type
+        let isCorrect = false;
+        const userAnswer = answers[question.id] || '';
+        
+        if (question.question_type === 'multiple_choice') {
+          isCorrect = userAnswer === question.correct_answer;
+        } else if (question.question_type === 'true_false') {
+          // For true/false, correct_answer is 'A' or 'B'
+          isCorrect = userAnswer === question.correct_answer;
+        } else if (question.question_type === 'one_word') {
+          // For one_word, compare with option_a (case-insensitive and trimmed)
+          const correctAnswer = question.option_a || '';
+          isCorrect = userAnswer.toLowerCase().trim() === correctAnswer.toLowerCase().trim();
+        }
+        
+        if (isCorrect) {
           score += question.points;
         }
       });
 
       const percentage = totalScore > 0 ? (score / totalScore) * 100 : 0;
       
-      // CRITICAL: Check if test is currently active (between start and end time)
-      const now = new Date();
-      const testStartTime = new Date(test!.start_time);
-      const testEndTime = new Date(test!.end_time);
-      const isTestActive = now >= testStartTime && now <= testEndTime;
+      // Check if user passed based on score (independent of test timing)
+      const passed = percentage >= (test?.pass_score || 70);
+      
+      // Badge should only be awarded if:
+      // 1. Test was NOT already ended when user started (wasAlreadyEnded = false)
+      // 2. User passed the test
+      const shouldAwardBadge = !wasAlreadyEnded && passed;
       
       console.log('=== TEST SUBMISSION CHECK ===');
-      console.log('Current time:', now.toISOString());
-      console.log('Test start:', test!.start_time);
-      console.log('Test end:', test!.end_time);
-      console.log('Is test ACTIVE?', isTestActive);
+      console.log('Was test already ended when started?', wasAlreadyEnded);
       console.log('Score:', score, '/', totalScore, `(${percentage.toFixed(2)}%)`);
-      
-      // Only pass if test is ACTIVE and score meets threshold
-      const passed = isTestActive && percentage >= (test?.pass_score || 70);
-      
       console.log('Passed?', passed);
-      console.log('Will create badge?', passed);
+      console.log('Will create badge?', shouldAwardBadge);
 
       // Save ONE attempt to database
       const { error: attemptError } = await supabase
@@ -231,7 +251,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
         }]);
 
       if (attemptError) throw attemptError;
-      console.log('✅ Attempt saved to database');
+      console.log('Attempt saved to database');
 
       // Update test statistics
       await supabase
@@ -244,8 +264,8 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
         .eq('id', testId);
 
       // ONLY create badge if test is ACTIVE and user passed
-      if (passed && isTestActive) {
-        console.log('🎖️ Creating badge entry (test is ACTIVE and user PASSED)...');
+      if (shouldAwardBadge) {
+        console.log('Creating badge entry (test is ACTIVE and user PASSED)...');
         
         const { data: badgeData, error: badgeError } = await supabase
           .from('badges')
@@ -257,53 +277,45 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
           .single();
 
         if (badgeError && !badgeError.message.includes('duplicate')) {
-          console.error('❌ Error creating badge:', badgeError);
+          console.error('Error creating badge:', badgeError);
         } else if (badgeData) {
-          console.log('✅ Badge entry created in database');
+          console.log('Badge entry created in database');
           
           // Auto-mint the badge NFT immediately
           try {
-            console.log('🎖️ Auto-minting NFT badge...');
+            console.log('Auto-minting NFT badge on blockchain...');
             
-            const metadataUri = await generateBadgeMetadataUri(
-              testId,
+            const mintResult = await mintNFTOnBlockchain(
               walletAddress,
+              testId,
               test!.title,
               score,
               totalScore
             );
 
-            console.log('📝 Metadata URI generated:', metadataUri);
-
-            const mintResult = await mintBadgeNFT(
-              walletAddress,
-              testId,
-              metadataUri
-            );
-
-            console.log('✅ Badge NFT auto-minted:', mintResult);
+            console.log('Badge NFT minted:', mintResult);
 
             // Update badge record with blockchain data
             await supabase
               .from('badges')
               .update({
-                nft_token_id: mintResult.tokenId,
+                nft_token_id: `badge_${testId}_${Date.now()}`,
                 mint_tx_hash: mintResult.txHash,
-                metadata_url: metadataUri,
+                metadata_url: mintResult.metadataUrl,
               })
               .eq('id', badgeData.id);
 
-            console.log(`🎉 Badge successfully created! Token ID: ${mintResult.tokenId}`);
+            console.log(`Badge successfully created! TX: ${mintResult.txHash}`);
           } catch (mintError) {
-            console.error('⚠️ Auto-mint failed, can mint later from My Badges:', mintError);
+            console.error('Auto-mint failed, can mint later from My Badges:', mintError);
           }
         } else if (badgeError?.message.includes('duplicate')) {
-          console.log('ℹ️ Badge already exists for this test');
+          console.log('Badge already exists for this test');
         }
       } else {
-        console.log('ℹ️ No badge created - Test is not active or user did not pass');
-        if (!isTestActive) {
-          console.log('  Reason: Test is not currently active (practice mode)');
+        console.log('ℹ️ No badge created - Test was already ended or user did not pass');
+        if (wasAlreadyEnded) {
+          console.log('  Reason: Test was already ended when user started (practice mode)');
         }
         if (!passed) {
           console.log('  Reason: Did not meet pass score threshold');
@@ -353,9 +365,9 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
         <div
           className="p-4 border-l-4 mb-4"
           style={{
-            backgroundColor: colors.lightPink,
-            borderColor: colors.rose,
-            color: colors.darkRed,
+            backgroundColor: colors.pinkLight,
+            borderColor: colors.red,
+            color: colors.red,
             borderRadius: '6px'
           }}
         >
@@ -365,7 +377,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
           onClick={onBack}
           className="px-6 py-2 text-white font-semibold"
           style={{
-            background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+            backgroundColor: colors.blue,
             borderRadius: '6px'
           }}
         >
@@ -379,7 +391,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
     return (
       <div>
         <div className="bg-white shadow-md p-8 text-center" style={{ borderRadius: '8px' }}>
-          <h3 className="text-2xl font-bold mb-3" style={{ color: colors.darkRed }}>
+          <h3 className="text-2xl font-bold mb-3" style={{ color: colors.red }}>
             No Questions Available
           </h3>
           <p className="text-gray-600 mb-4">
@@ -402,7 +414,7 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
           onClick={onBack}
           className="mt-4 px-6 py-2 text-white font-semibold"
           style={{
-            background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
+            backgroundColor: colors.blue,
             borderRadius: '6px'
           }}
         >
@@ -419,130 +431,139 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
     const canMintBadge = result.passed && !isPracticeMode && !testEndedDuringTest;
 
     return (
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white shadow-lg p-8" style={{ borderRadius: '8px' }}>
+      <div className="max-w-4xl mx-auto">
+        <div className="p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]" style={{ backgroundColor: 'white' }}>
+          {/* Header */}
           <div className="text-center mb-8">
-            <div 
-              className="w-24 h-24 mx-auto mb-4 flex items-center justify-center font-bold text-2xl"
+            <div
+              className="inline-block px-6 py-3 border-4 border-black mb-4"
               style={{
-                backgroundColor: result.passed ? colors.lightBlue : colors.lightYellow,
-                color: result.passed ? colors.blue : colors.orange,
-                borderRadius: '50%'
+                backgroundColor: result.passed ? colors.green : colors.red,
+                transform: 'rotate(-2deg)'
               }}
             >
-              {result.passed ? 'PASS' : isPracticeMode ? 'DONE' : 'FAIL'}
+              <h2 className="text-3xl font-black text-white">
+                {result.passed ? '✓ TEST PASSED!' : '✗ TEST FAILED'}
+              </h2>
             </div>
-            <h2 className="text-3xl font-bold mb-2" style={{ color: colors.darkRed }}>
-              {isPracticeMode ? 'Practice Test Complete' : result.passed ? 'Congratulations!' : 'Test Complete'}
-            </h2>
-            <p className="text-lg text-gray-600">
+            <p className="text-xl font-bold mt-4">
               {test!.title}
             </p>
+            
+            {/* Warning Messages */}
             {isPracticeMode && (
-              <p className="text-sm mt-2 px-4 py-2" style={{ 
-                color: colors.orange,
-                backgroundColor: colors.lightYellow,
-                borderRadius: '6px'
-              }}>
-                Practice Mode: This test has ended. No NFT badge awarded for practice attempts.
-              </p>
+              <div className="mt-4 p-4 border-4 border-black" style={{ backgroundColor: colors.yellowLight }}>
+                <p className="font-bold" style={{ color: colors.orange }}>
+                  ⚠ Practice Mode
+                </p>
+                <p className="text-sm mt-1">
+                  This test has ended. No NFT badge awarded for practice attempts.
+                </p>
+              </div>
             )}
             {testEndedDuringTest && !isPracticeMode && (
-              <p className="text-sm mt-2 px-4 py-2" style={{ 
-                color: colors.orange,
-                backgroundColor: colors.lightYellow,
-                borderRadius: '6px'
-              }}>
-                The test ended while you were taking it. No badge awarded.
-              </p>
+              <div className="mt-4 p-4 border-4 border-black" style={{ backgroundColor: colors.yellowLight }}>
+                <p className="font-bold" style={{ color: colors.orange }}>
+                  ⚠ Test Ended
+                </p>
+                <p className="text-sm mt-1">
+                  The test ended while you were taking it. No badge awarded.
+                </p>
+              </div>
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          {/* Score Cards */}
+          <div className="grid grid-cols-3 gap-6 mb-8">
+            {/* Score */}
             <div
-              className="p-6 text-center"
-              style={{ backgroundColor: colors.lightBlue, borderRadius: '8px' }}
+              className="p-6 text-center border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              style={{ backgroundColor: colors.blueLight }}
             >
-              <p className="text-sm text-gray-600 mb-2">Score</p>
-              <p className="text-3xl font-bold" style={{ color: colors.blue }}>
-                {result.score}/{result.totalScore}
+              <p className="text-sm font-bold mb-2 uppercase tracking-wide">Score</p>
+              <p className="text-4xl font-black" style={{ color: colors.blue }}>
+                {result.score}
               </p>
+              <p className="text-sm font-bold mt-1">/ {result.totalScore}</p>
             </div>
 
+            {/* Percentage */}
             <div
-              className="p-6 text-center"
-              style={{ backgroundColor: colors.lightYellow, borderRadius: '8px' }}
+              className="p-6 text-center border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              style={{ backgroundColor: colors.yellowLight }}
             >
-              <p className="text-sm text-gray-600 mb-2">Percentage</p>
-              <p className="text-3xl font-bold" style={{ color: colors.orange }}>
-                {result.percentage.toFixed(1)}%
+              <p className="text-sm font-bold mb-2 uppercase tracking-wide">Percentage</p>
+              <p className="text-4xl font-black" style={{ color: colors.orange }}>
+                {result.percentage.toFixed(0)}
               </p>
+              <p className="text-sm font-bold mt-1">%</p>
             </div>
 
+            {/* Status */}
             <div
-              className="p-6 text-center"
+              className="p-6 text-center border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
               style={{
-                backgroundColor: result.passed ? colors.lightMint : colors.lightPink,
-                borderRadius: '8px'
+                backgroundColor: result.passed ? colors.greenLight : colors.pinkLight
               }}
             >
-              <p className="text-sm text-gray-600 mb-2">Status</p>
-              <p className="text-xl font-bold" style={{ color: result.passed ? '#059669' : colors.darkRed }}>
+              <p className="text-sm font-bold mb-2 uppercase tracking-wide">Status</p>
+              <p className="text-2xl font-black" style={{ color: result.passed ? colors.green : colors.red }}>
                 {result.passed ? 'PASSED' : 'FAILED'}
+              </p>
+              <p className="text-sm font-bold mt-1">
+                {result.passed ? 'Great job!' : 'Try again'}
               </p>
             </div>
           </div>
 
+          {/* Badge Earned Message */}
           {result.passed && !isPracticeMode && (
             <div
-              className="p-6 mb-6 text-center"
-              style={{
-                backgroundColor: colors.lightMint,
-                borderRadius: '8px',
-                border: `2px solid #059669`
-              }}
+              className="p-6 mb-8 text-center border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+              style={{ backgroundColor: colors.greenLight }}
             >
-              <p className="text-lg font-semibold mb-2" style={{ color: '#059669' }}>
+              <p className="text-2xl font-black mb-2" style={{ color: colors.green }}>
                 Badge NFT Earned!
               </p>
               {canMintBadge ? (
-                <p className="text-sm text-gray-600">
-                  Your badge NFT has been automatically minted on the Stellar blockchain! Check "My Badges" tab to view it.
+                <p className="text-sm font-semibold">
+                  Your badge NFT has been automatically minted on the Stellar blockchain!<br />
+                  Check the "My Badges" tab to view it.
                 </p>
               ) : (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm font-semibold">
                   Note: This test has ended. Badge cannot be awarded for tests that have ended.
                 </p>
               )}
             </div>
           )}
 
+          {/* Failed Message */}
           {!result.passed && !testEndedDuringTest && (
             <div
-              className="p-6 mb-6 text-center"
-              style={{
-                backgroundColor: colors.lightYellow,
-                borderRadius: '8px'
-              }}
+              className="p-6 mb-8 text-center border-4 border-black"
+              style={{ backgroundColor: colors.yellowLight }}
             >
-              <p className="text-sm text-gray-600">
-                You need {test.pass_score}% to pass. Keep practicing!
+              <p className="text-lg font-bold mb-2">
+                Keep Practicing!
+              </p>
+              <p className="text-sm font-semibold">
+                You need {test.pass_score}% to pass this test.
+              </p>
+              <p className="text-xs mt-2 text-gray-600">
+                Review the material and try again when ready.
               </p>
             </div>
           )}
 
-          <div className="flex gap-4">
-            <button
-              onClick={onBack}
-              className="flex-1 px-6 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200"
-              style={{
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
-                borderRadius: '6px'
-              }}
-            >
-              ← Back to Tests
-            </button>
-          </div>
+          {/* Back Button */}
+          <button
+            onClick={onBack}
+            className="w-full px-6 py-4 text-white font-black text-lg border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all duration-150 uppercase tracking-wide"
+            style={{ backgroundColor: colors.blue }}
+          >
+            ← Back to Tests
+          </button>
         </div>
       </div>
     );
@@ -555,195 +576,262 @@ const TakeTestTab = ({ testId, walletAddress, onBack }: TakeTestTabProps) => {
     <div className="max-w-4xl mx-auto">
       {/* Warning Banner for Ended Tests */}
       {testEnded && (
-        <div
-          className="p-4 mb-4 border-l-4 flex items-center gap-3"
-          style={{
-            backgroundColor: colors.lightPink,
-            borderColor: colors.rose,
-            borderRadius: '6px'
-          }}
+        <Card
+          className="mb-4 border-4"
+          style={{ backgroundColor: colors.pinkLight, borderColor: colors.red }}
         >
-          <div className="text-3xl">⚠️</div>
-          <div>
-            <p className="font-bold" style={{ color: colors.darkRed }}>
-              This test has already ended {testEndedAgo}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              You can still take it for practice, but <strong>no badge will be awarded</strong> for ended tests.
-            </p>
-          </div>
-        </div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="text-3xl">!</div>
+            <div>
+              <p className="font-bold" style={{ color: colors.red }}>
+                This test has already ended {testEndedAgo}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                You can still take it for practice, but <strong>no badge will be awarded</strong> for ended tests.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Header */}
-      <div className="bg-white shadow-md p-6 mb-6" style={{ borderRadius: '8px' }}>
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-              {test.title}
-            </h2>
-            {test.company && (
-              <p className="text-sm text-gray-500">By {test.company}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            {!wasAlreadyEnded && timeRemaining !== null && timeRemaining > 0 && (
+      <Card
+        className="mb-4 border-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+        style={{ backgroundColor: colors.purpleLight }}
+      >
+        <CardContent className="p-4">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-2xl font-bold" style={{ color: colors.purple }}>
+                {test.title}
+              </h2>
+              {test.company && (
+                <p className="text-sm text-gray-600">By {test.company}</p>
+              )}
+              {test.contract_address && (
+                <button
+                  onClick={() => window.open(getContractExplorerUrl(test.contract_address!), '_blank')}
+                  className="text-xs font-mono font-medium mt-1 px-2 py-1 border-2 border-black rounded-base bg-white hover:bg-gray-50 transition-colors inline-flex items-center gap-1"
+                  style={{ color: colors.purple }}
+                >
+                  <span>Contract: {formatContractAddress(test.contract_address)}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {!wasAlreadyEnded && timeRemaining !== null && timeRemaining > 0 && (
               <div className="text-center">
                 <p className="text-xs text-gray-500 mb-1">Time Remaining</p>
                 <p className="text-lg font-bold" style={{ 
-                  color: timeRemaining < 60000 ? colors.rose : timeRemaining < 300000 ? colors.orange : colors.blue 
+                  color: timeRemaining < 60000 ? colors.red : timeRemaining < 300000 ? colors.orange : colors.blue 
                 }}>
                   {formatTimeRemaining(timeRemaining)}
                 </p>
               </div>
-            )}
+              )}
             {wasAlreadyEnded && (
-              <div className="px-4 py-2" style={{ backgroundColor: colors.lightYellow, borderRadius: '6px' }}>
-                <p className="text-xs text-gray-500">Practice Mode</p>
+              <div
+                className="px-4 py-2 border-2 border-black rounded-base"
+                style={{ backgroundColor: colors.yellowLight }}
+              >
+                <p className="text-xs text-gray-600">Practice Mode</p>
                 <p className="text-sm font-semibold" style={{ color: colors.orange }}>
                   No Time Limit
                 </p>
               </div>
             )}
             {testEnded && !wasAlreadyEnded && (
-              <div className="px-4 py-2" style={{ backgroundColor: colors.lightPink, borderRadius: '6px' }}>
-                <p className="text-xs text-gray-500">Test Ended</p>
-                <p className="text-sm font-semibold" style={{ color: colors.darkRed }}>
+              <div className="px-4 py-2 border-2 border-black rounded-base" style={{ backgroundColor: colors.pinkLight }}>
+                <p className="text-xs text-gray-600">Test Ended</p>
+                <p className="text-sm font-semibold" style={{ color: colors.red }}>
                   Time's Up
                 </p>
               </div>
             )}
-            <button
+            <Button
               onClick={onBack}
-              className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
-              style={{ borderRadius: '6px' }}
+              variant="outline"
+              className="text-sm"
             >
-              ✕ Exit
-            </button>
+              Exit
+            </Button>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="mb-2">
+        <div className="mt-4">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
             <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
             <span>{Object.keys(answers).length} answered</span>
           </div>
-          <div className="w-full bg-gray-200 h-2" style={{ borderRadius: '4px' }}>
+          <div className="w-full bg-gray-200 h-2 border-2 border-black rounded-base">
             <div
-              className="h-2 transition-all duration-300"
+              className="h-full transition-all duration-300"
               style={{
                 width: `${progress}%`,
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
-                borderRadius: '4px'
+                backgroundColor: colors.purple
               }}
             />
           </div>
         </div>
-      </div>
+      </CardContent>
+      </Card>
 
       {/* Question */}
-      <div className="bg-white shadow-md p-8 mb-6" style={{ borderRadius: '8px' }}>
-        <div className="mb-6">
-          <div className="flex items-start gap-3 mb-4">
-            <span
-              className="px-3 py-1 text-sm font-bold"
-              style={{
-                backgroundColor: colors.lightBlue,
-                color: colors.blue,
-                borderRadius: '6px'
-              }}
-            >
-              Q{currentQuestionIndex + 1}
-            </span>
-            <h3 className="text-xl font-semibold flex-1" style={{ color: colors.darkRed }}>
-              {currentQuestion.question_text}
-            </h3>
-            <span className="text-sm text-gray-500">
-              {currentQuestion.points} {currentQuestion.points === 1 ? 'point' : 'points'}
-            </span>
-          </div>
-        </div>
-
-        {/* Options */}
-        <div className="space-y-3">
-          {['A', 'B', 'C', 'D'].map((option) => {
-            const optionText = currentQuestion[`option_${option.toLowerCase()}` as keyof Question] as string;
-            const isSelected = answers[currentQuestion.id] === option;
-
-            return (
-              <button
-                key={option}
-                onClick={() => handleAnswerSelect(currentQuestion.id, option)}
-                className={`w-full text-left p-4 border-2 transition-all duration-200 ${
-                  isSelected ? 'shadow-md' : 'hover:shadow-sm'
-                }`}
+      <Card
+        className="mb-4 border-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+        style={{ backgroundColor: colors.white }}
+      >
+        <CardContent className="p-6">
+          <div className="mb-4">
+            <div className="flex items-start gap-3 mb-4">
+              <span
+                className="px-3 py-1 text-sm font-bold border-2 border-black rounded-base"
                 style={{
-                  borderColor: isSelected ? colors.blue : '#E5E7EB',
-                  backgroundColor: isSelected ? colors.lightBlue : 'white',
-                  borderRadius: '8px'
+                  backgroundColor: colors.purpleLight,
+                  color: colors.purple
                 }}
               >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center font-bold"
+                Q{currentQuestionIndex + 1}
+              </span>
+              <h3 className="text-xl font-semibold flex-1" style={{ color: colors.purple }}>
+                {currentQuestion.question_text}
+              </h3>
+              <span className="text-sm font-bold px-2 py-1 border-2 border-black rounded-base" style={{ backgroundColor: colors.yellowLight, color: colors.orange }}>
+                {currentQuestion.points} {currentQuestion.points === 1 ? 'point' : 'points'}
+              </span>
+            </div>
+          </div>        {/* Options */}
+        <div className="space-y-3">
+          {currentQuestion.question_type === 'multiple_choice' && (
+            <>
+              {[
+                { letter: 'A', text: currentQuestion.option_a },
+                { letter: 'B', text: currentQuestion.option_b },
+                ...(currentQuestion.num_options && currentQuestion.num_options >= 3 ? [{ letter: 'C', text: currentQuestion.option_c || '' }] : []),
+                ...(currentQuestion.num_options && currentQuestion.num_options === 4 ? [{ letter: 'D', text: currentQuestion.option_d || '' }] : [])
+              ].map((option) => {
+                const isSelected = answers[currentQuestion.id] === option.letter;
+
+                return (
+                  <button
+                    key={option.letter}
+                    onClick={() => handleAnswerSelect(currentQuestion.id, option.letter)}
+                    className={`w-full text-left p-4 border-2 border-black rounded-base transition-all duration-200 ${
+                      isSelected ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px]'
+                    }`}
                     style={{
-                      backgroundColor: isSelected ? colors.blue : '#F3F4F6',
-                      color: isSelected ? 'white' : '#6B7280'
+                      backgroundColor: isSelected ? colors.purpleLight : colors.white
                     }}
                   >
-                    {option}
-                  </div>
-                  <span className={isSelected ? 'font-semibold' : ''}>
-                    {optionText}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-bold border-2 border-black"
+                        style={{
+                          backgroundColor: isSelected ? colors.purple : colors.white,
+                          color: isSelected ? 'white' : colors.purple
+                        }}
+                      >
+                        {option.letter}
+                      </div>
+                      <span className={isSelected ? 'font-semibold' : ''}>
+                        {option.text}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </>
+          )}
+
+          {currentQuestion.question_type === 'true_false' && (
+            <div className="flex gap-4">
+              {[
+                { value: 'A', label: 'True' },
+                { value: 'B', label: 'False' }
+              ].map((option) => {
+                const isSelected = answers[currentQuestion.id] === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => handleAnswerSelect(currentQuestion.id, option.value)}
+                    className={`flex-1 py-4 px-6 font-semibold border-2 border-black rounded-base transition-all duration-200 ${
+                      isSelected ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                    }`}
+                    style={{
+                      backgroundColor: isSelected ? colors.purpleLight : colors.white,
+                      color: isSelected ? colors.purple : '#6B7280'
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {currentQuestion.question_type === 'one_word' && (
+            <div>
+              <input
+                type="text"
+                value={answers[currentQuestion.id] || ''}
+                onChange={(e) => {
+                  console.log('One-word input changed:', e.target.value);
+                  handleAnswerSelect(currentQuestion.id, e.target.value);
+                }}
+                placeholder="Type your answer here..."
+                className="w-full px-5 py-3 border-2 border-black rounded-base focus:outline-none focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all"
+                style={{
+                  ...(answers[currentQuestion.id] && {
+                    backgroundColor: colors.purpleLight
+                  })
+                }}
+                autoComplete="off"
+              />
+              <p className="text-xs text-gray-500 mt-2">Answer is case-insensitive and spaces will be trimmed</p>
+            </div>
+          )}
         </div>
-      </div>
+      </CardContent>
+      </Card>
 
       {/* Navigation */}
       <div className="flex justify-between items-center">
-        <button
+        <Button
           onClick={handlePreviousQuestion}
           disabled={currentQuestionIndex === 0}
-          className="px-6 py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: 'white',
-            color: colors.blue,
-            border: `2px solid ${colors.blue}`,
-            borderRadius: '6px'
-          }}
+          variant="outline"
         >
-          ← Previous
-        </button>
+          Previous
+        </Button>
 
         <div className="flex gap-3">
           {currentQuestionIndex === questions.length - 1 ? (
-            <button
+            <Button
               onClick={() => handleSubmitTest(false)}
               disabled={submitting}
-              className="px-8 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+              className="px-8"
               style={{
-                background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
-                borderRadius: '6px'
+                backgroundColor: colors.orange,
+                color: colors.white
               }}
             >
-              {submitting ? '⏳ Submitting...' : '✓ Submit Test'}
-            </button>
+              {submitting ? 'Submitting...' : 'Submit Test'}
+            </Button>
           ) : (
-            <button
+            <Button
               onClick={handleNextQuestion}
-              className="px-6 py-3 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-200"
               style={{
-                background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)`,
-                borderRadius: '6px'
+                backgroundColor: colors.purple,
+                color: colors.white
               }}
             >
-              Next →
-            </button>
+              Next
+            </Button>
           )}
         </div>
       </div>

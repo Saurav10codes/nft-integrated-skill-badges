@@ -6,6 +6,9 @@ import BadgesTab from './BadgesTab';
 import CreateTestTab from './CreateTestTab';
 import MyTestsTab from './MyTestsTab';
 import TakeTestTab from './TakeTestTab';
+import ProfileTab from './ProfileTab';
+import { Button } from '../components/ui/Button';
+import { Card, CardContent } from '../components/ui/Card';
 
 interface User {
   id: string;
@@ -74,10 +77,6 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  const formatAddress = (address: string) => {
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-  };
-
   const handleTakeTest = (testId: string) => {
     navigate(`/test/${testId}`);
   };
@@ -108,278 +107,165 @@ const Dashboard = () => {
 
   if (!user) {
     return (
-      <div 
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 100%)` }}
-      >
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card>
+          <CardContent className="py-5">
+            <p className="text-xl font-heading">Loading...</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: colors.cream }}>
-      {/* Sidebar - Fixed */}
-      <aside
-        className="w-64 shadow-lg flex flex-col h-screen"
-        style={{ backgroundColor: 'white', borderRight: `1px solid ${colors.lightBlue}` }}
-      >
+    <div className="flex h-screen overflow-hidden dotted-grid-bg" style={{ backgroundColor: colors.background }}>
+      {/* Sidebar - Fixed with Neobrutalism design */}
+      <aside className="w-64 bg-secondary-background border-r-4 border-border flex flex-col h-screen shadow-lg" style={{ backgroundColor: colors.yellowLight }}>
         {/* Logo/Brand */}
-        <div
-          className="p-6 border-b"
-          style={{ borderColor: colors.lightBlue }}
-        >
-          <h1 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            Stellar Skills
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Dashboard</p>
+        <div className="p-5 border-b-4 border-border flex items-center justify-center h-20" style={{ backgroundColor: colors.orangeLight }}>
+          <div className="text-center">
+            <h1 className="text-xl font-heading">Stellar Skills</h1>
+            <p className="text-xs font-heading mt-0.5">Dashboard</p>
+          </div>
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 p-4">
-          <button
+        <nav className="flex-1 p-4 space-y-2">
+          <Button
+            variant={activeMenu === 'profile' ? 'default' : 'neutral'}
+            className={`w-full justify-start text-base ${
+              activeMenu === 'profile' 
+                ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px]'
+                : 'hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] active:shadow-[-2px_-2px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-[4px] active:translate-y-[4px]'
+            } transition-all duration-150`}
             onClick={() => setActiveMenu('profile')}
-            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
-              activeMenu === 'profile' ? 'shadow-md' : 'hover:shadow-sm'
-            }`}
             style={{
-              backgroundColor: activeMenu === 'profile' ? colors.lightBlue : 'transparent',
-              color: activeMenu === 'profile' ? colors.blue : '#4B5563',
-              borderRadius: '6px'
+              backgroundColor: activeMenu === 'profile' ? colors.blueLight : 'transparent',
+              borderColor: activeMenu === 'profile' ? colors.blue : '#E5E7EB',
+              color: activeMenu === 'profile' ? colors.blue : '#4B5563'
             }}
           >
             Profile
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant={activeMenu === 'earn' ? 'default' : 'neutral'}
+            className={`w-full justify-start text-base ${
+              activeMenu === 'earn' 
+                ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px]'
+                : 'hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] active:shadow-[-2px_-2px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-[4px] active:translate-y-[4px]'
+            } transition-all duration-150`}
             onClick={() => setActiveMenu('earn')}
-            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
-              activeMenu === 'earn' ? 'shadow-md' : 'hover:shadow-sm'
-            }`}
             style={{
-              backgroundColor: activeMenu === 'earn' ? colors.lightBlue : 'transparent',
-              color: activeMenu === 'earn' ? colors.blue : '#4B5563',
-              borderRadius: '6px'
+              backgroundColor: activeMenu === 'earn' ? colors.blueLight : 'transparent',
+              borderColor: activeMenu === 'earn' ? colors.blue : '#E5E7EB',
+              color: activeMenu === 'earn' ? colors.blue : '#4B5563'
             }}
           >
             Earn
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant={activeMenu === 'badges' ? 'default' : 'neutral'}
+            className={`w-full justify-start text-base ${
+              activeMenu === 'badges' 
+                ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px]'
+                : 'hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] active:shadow-[-2px_-2px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-[4px] active:translate-y-[4px]'
+            } transition-all duration-150`}
             onClick={() => setActiveMenu('badges')}
-            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
-              activeMenu === 'badges' ? 'shadow-md' : 'hover:shadow-sm'
-            }`}
             style={{
-              backgroundColor: activeMenu === 'badges' ? colors.lightBlue : 'transparent',
-              color: activeMenu === 'badges' ? colors.blue : '#4B5563',
-              borderRadius: '6px'
+              backgroundColor: activeMenu === 'badges' ? colors.blueLight : 'transparent',
+              borderColor: activeMenu === 'badges' ? colors.blue : '#E5E7EB',
+              color: activeMenu === 'badges' ? colors.blue : '#4B5563'
             }}
           >
             My Badges
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant={activeMenu === 'mytests' ? 'default' : 'neutral'}
+            className={`w-full justify-start text-base ${
+              activeMenu === 'mytests' 
+                ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px]'
+                : 'hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] active:shadow-[-2px_-2px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-[4px] active:translate-y-[4px]'
+            } transition-all duration-150`}
             onClick={() => setActiveMenu('mytests')}
-            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
-              activeMenu === 'mytests' ? 'shadow-md' : 'hover:shadow-sm'
-            }`}
             style={{
-              backgroundColor: activeMenu === 'mytests' ? colors.lightBlue : 'transparent',
-              color: activeMenu === 'mytests' ? colors.blue : '#4B5563',
-              borderRadius: '6px'
+              backgroundColor: activeMenu === 'mytests' ? colors.blueLight : 'transparent',
+              borderColor: activeMenu === 'mytests' ? colors.blue : '#E5E7EB',
+              color: activeMenu === 'mytests' ? colors.blue : '#4B5563'
             }}
           >
             My Tests
-          </button>
+          </Button>
 
-          <button
+          <Button
+            variant={activeMenu === 'create' ? 'default' : 'neutral'}
+            className={`w-full justify-start text-base ${
+              activeMenu === 'create' 
+                ? 'shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px]'
+                : 'hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] active:shadow-[-2px_-2px_0px_0px_rgba(0,0,0,0.3)] active:translate-x-[4px] active:translate-y-[4px]'
+            } transition-all duration-150`}
             onClick={() => setActiveMenu('create')}
-            className={`w-full text-left px-4 py-3 mb-2 font-medium transition-all duration-200 ${
-              activeMenu === 'create' ? 'shadow-md' : 'hover:shadow-sm'
-            }`}
             style={{
-              backgroundColor: activeMenu === 'create' ? colors.lightBlue : 'transparent',
-              color: activeMenu === 'create' ? colors.blue : '#4B5563',
-              borderRadius: '6px'
+              backgroundColor: activeMenu === 'create' ? colors.blueLight : 'transparent',
+              borderColor: activeMenu === 'create' ? colors.blue : '#E5E7EB',
+              color: activeMenu === 'create' ? colors.blue : '#4B5563'
             }}
           >
             Create Test
-          </button>
+          </Button>
         </nav>
 
         {/* User Info & Logout */}
-        <div 
-          className="p-4 border-t"
-          style={{ borderColor: colors.lightBlue }}
-        >
-          <div 
-            className="p-3 mb-3"
-            style={{ backgroundColor: colors.cream, borderRadius: '6px' }}
-          >
-            <p className="text-xs text-gray-500 mb-1">Connected Wallet</p>
-            <p className="font-mono text-sm font-medium" style={{ color: colors.blue }}>
-              {formatAddress(account)}
-            </p>
-          </div>
+        <div className="p-4 border-t-4 border-border space-y-2" style={{ backgroundColor: colors.pinkLight }}>
+          <Card style={{ backgroundColor: colors.white }} className="border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            <CardContent className="py-2 px-2.5">
+              <p className="text-xs font-heading mb-0.5">Wallet</p>
+              <p className="font-mono text-xs font-bold break-all">
+                {`${account.substring(0, 6)}...${account.substring(account.length - 4)}`}
+              </p>
+            </CardContent>
+          </Card>
           
-          <button
+          <Button
+            variant="reverse"
+            className="w-full font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[8px] active:translate-y-[8px] transition-all duration-150"
             onClick={handleLogout}
-            className="w-full text-white px-4 py-3 font-semibold transition-all duration-200 shadow-md hover:shadow-lg"
-            style={{ 
-              background: `linear-gradient(135deg, ${colors.darkRed} 0%, ${colors.rose} 100%)`,
-              borderRadius: '6px'
-            }}
           >
             Logout
-          </button>
+          </Button>
         </div>
       </aside>
 
       {/* Main Content - Scrollable */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Header - Fixed */}
-        <header
-          className="bg-white shadow-sm border-b p-6 shrink-0"
-          style={{ borderColor: colors.lightBlue }}
-        >
-          <h2 className="text-2xl font-bold" style={{ color: colors.darkRed }}>
-            {activeMenu === 'profile' && 'Profile'}
-            {activeMenu === 'earn' && 'Earn'}
-            {activeMenu === 'badges' && 'My Badges'}
-            {activeMenu === 'mytests' && 'My Tests'}
-            {activeMenu === 'create' && 'Create Test'}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            {activeMenu === 'profile' && 'Manage your account and view your information'}
-            {activeMenu === 'earn' && 'Take tests and earn NFT badges'}
-            {activeMenu === 'badges' && 'View your earned badges'}
-            {activeMenu === 'mytests' && 'Manage and view analytics for your created tests'}
-            {activeMenu === 'create' && 'Create a new skill test'}
-          </p>
+        <header className="bg-secondary-background border-b-4 border-border px-6 flex items-center shrink-0 h-20 shadow-shadow" style={{ backgroundColor: colors.purpleLight }}>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-heading whitespace-nowrap">
+              {activeMenu === 'profile' && 'Profile'}
+              {activeMenu === 'earn' && 'Earn'}
+              {activeMenu === 'badges' && 'My Badges'}
+              {activeMenu === 'mytests' && 'My Tests'}
+              {activeMenu === 'create' && 'Create Test'}
+            </h2>
+            <span className="text-border/20 font-light text-xl">|</span>
+            <p className="text-sm font-heading">
+              {activeMenu === 'profile' && 'View and manage your profile'}
+              {activeMenu === 'earn' && 'Discover and take tests to earn badges'}
+              {activeMenu === 'badges' && 'View your earned NFT badges'}
+              {activeMenu === 'mytests' && 'Manage tests you have created'}
+              {activeMenu === 'create' && 'Design and publish new skill tests'}
+            </p>
+          </div>
         </header>
 
         {/* Content Area - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeMenu === 'profile' && (
             <>
-              {/* Welcome Section */}
-              <div 
-                className="bg-white shadow-md p-6 mb-6"
-                style={{ borderRadius: '8px' }}
-              >
-                <h3 className="text-xl font-bold mb-2" style={{ color: colors.darkRed }}>
-                  Welcome back
-                </h3>
-                <p className="text-gray-600">
-                  You're successfully logged in to your Stellar account.
-                </p>
-              </div>
-
-              {/* User Info Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {/* User ID Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.cream, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">User ID</h4>
-                  <p className="font-mono text-sm break-all" style={{ color: colors.blue }}>
-                    {user.id}
-                  </p>
-                </div>
-
-                {/* Wallet Address Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightPink, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Wallet Address</h4>
-                  <p className="font-mono text-sm break-all" style={{ color: colors.darkRed }}>
-                    {user.wallet_address}
-                  </p>
-                </div>
-
-                {/* Member Since Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightYellow, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Member Since</h4>
-                  <p className="font-mono text-sm" style={{ color: colors.orange }}>
-                    {new Date(user.created_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-
-                {/* Last Login Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.peach, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Last Login</h4>
-                  <p className="font-mono text-sm" style={{ color: colors.darkRed }}>
-                    {new Date(user.last_login).toLocaleString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-
-                {/* Account Status Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightMint, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Account Status</h4>
-                  <p className="font-semibold text-lg" style={{ color: '#059669' }}>Active</p>
-                </div>
-
-                {/* Network Card */}
-                <div 
-                  className="shadow-md p-5 hover:shadow-lg transition-shadow duration-300"
-                  style={{ backgroundColor: colors.lightBlue, borderRadius: '8px' }}
-                >
-                  <h4 className="text-sm font-semibold text-gray-500 mb-2">Network</h4>
-                  <p className="font-semibold text-lg" style={{ color: colors.blue }}>Stellar</p>
-                </div>
-              </div>
-
-              {/* Account Details */}
-              <div 
-                className="bg-white shadow-md p-6"
-                style={{ borderRadius: '8px' }}
-              >
-                <h3 className="text-xl font-bold mb-4" style={{ color: colors.darkRed }}>
-                  Account Details
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between py-3 border-b" style={{ borderColor: colors.lightBlue }}>
-                    <span className="font-medium text-gray-700">Full Wallet Address</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {user.wallet_address}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-3 border-b" style={{ borderColor: colors.lightBlue }}>
-                    <span className="font-medium text-gray-700">User ID</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {user.id}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-3">
-                    <span className="font-medium text-gray-700">Account Created</span>
-                    <span className="font-mono text-sm" style={{ color: colors.blue }}>
-                      {new Date(user.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <ProfileTab userId={user.id} />
             </>
           )}
 
@@ -389,10 +275,11 @@ const Dashboard = () => {
             <BadgesTab 
               walletAddress={account} 
               onViewTest={handleViewTestFromBadges}
+              onSwitchTab={(tab) => setActiveMenu(tab as MenuItem)}
             />
           )}
 
-          {activeMenu === 'mytests' && <MyTestsTab walletAddress={account} />}
+          {activeMenu === 'mytests' && <MyTestsTab walletAddress={account} onSwitchTab={(tab) => setActiveMenu(tab as MenuItem)} />}
 
           {activeMenu === 'create' && <CreateTestTab walletAddress={account} />}
 

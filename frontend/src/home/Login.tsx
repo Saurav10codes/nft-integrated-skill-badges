@@ -7,6 +7,8 @@ import {
   formatStellarAddress,
 } from "../utils/freighter";
 import { supabase, type User } from "../config/supabase";
+import { Button } from "../components/ui/Button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/Card";
 
 const Login = () => {
   const [account, setAccount] = useState<string>("");
@@ -26,35 +28,18 @@ const Login = () => {
   }, []);
 
   const checkFreighterStatus = async () => {
-    console.log("🔍 Checking for Freighter wallet using official API...");
-
     try {
-      // Use the official Freighter API to check connection
       const installed = await isFreighterInstalled();
-
       if (installed) {
-        console.log("✅ Freighter is installed and detected!");
         setFreighterStatus("Detected");
         setError("");
       } else {
-        console.log("❌ Freighter not found");
-        console.log("");
-        console.log("📋 INSTALLATION STEPS:");
-        console.log("1. Install Freighter from: https://www.freighter.app/");
-        console.log("2. Refresh this page after installation");
-        console.log("3. Make sure the extension is enabled in your browser");
-        console.log("");
         setFreighterStatus("Not installed");
-        setError(
-          "Freighter wallet not detected. Please install it from freighter.app"
-        );
+        setError("Freighter wallet not detected. Please install it from freighter.app");
       }
     } catch (error) {
-      console.error("Error checking Freighter status:", error);
       setFreighterStatus("Not installed");
-      setError(
-        "Error checking Freighter. Please install it from freighter.app"
-      );
+      setError("Error checking Freighter. Please install it from freighter.app");
     }
   };
 
@@ -62,7 +47,6 @@ const Login = () => {
     try {
       const savedUser = localStorage.getItem("stellar_user");
       const savedAddress = localStorage.getItem("stellar_wallet");
-
       if (savedUser && savedAddress) {
         setAccount(savedAddress);
         setUser(JSON.parse(savedUser));
@@ -77,50 +61,28 @@ const Login = () => {
     try {
       setLoading(true);
       setError("");
-
-      // Check if Freighter is installed (with wait time)
       const installed = await isFreighterInstalled();
       if (!installed) {
-        setError(
-          "Please install Freighter wallet to continue. Visit https://www.freighter.app/"
-        );
+        setError("not_installed");
         setLoading(false);
         return;
       }
-
-      // Authenticate with Freighter
-      const {
-        wallet_address,
-        user: userData,
-        isNewUser,
-      } = await authenticateWithFreighter();
-
-      // If user has no username, show modal to set it
+      const { wallet_address, user: userData } = await authenticateWithFreighter();
       if (!userData.username) {
-        setTempWalletData({ wallet_address, user: userData, isNewUser });
+        setTempWalletData({ wallet_address, user: userData });
         setShowUsernameModal(true);
         setLoading(false);
         return;
       }
-
-      // Complete login
       completeLogin(wallet_address, userData);
     } catch (err: any) {
-      console.error("Error connecting wallet:", err);
-
-      if (err.message.includes("User declined")) {
-        setError("Connection request was rejected. Please try again.");
-      } else if (err.message.includes("not installed")) {
-        setError(
-          "Please install Freighter wallet from https://www.freighter.app/"
-        );
-      } else {
-        setError(err.message || "Failed to connect wallet");
-      }
-
+      console.error("Wallet connection error:", err);
+      // Set error state to make button red, but don't display error message
+      setError("connection_failed");
       cleanupLoginState();
-    } finally {
       setLoading(false);
+      // Clear error state after 3 seconds to reset button color
+      setTimeout(() => setError(""), 3000);
     }
   };
 
@@ -129,36 +91,27 @@ const Login = () => {
       setError("Username is required");
       return;
     }
-
     if (username.length < 3) {
       setError("Username must be at least 3 characters");
       return;
     }
-
     if (username.length > 20) {
       setError("Username must be less than 20 characters");
       return;
     }
-
     try {
       setLoading(true);
       setError("");
-
-      // Update user with username
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update({ username: username.trim() })
         .eq('wallet_address', tempWalletData.wallet_address)
         .select()
         .single();
-
       if (updateError) throw updateError;
-
-      // Complete login with updated user data
       setShowUsernameModal(false);
       completeLogin(tempWalletData.wallet_address, updatedUser);
     } catch (err: any) {
-      console.error("Error setting username:", err);
       setError(err.message || "Failed to set username");
     } finally {
       setLoading(false);
@@ -168,12 +121,8 @@ const Login = () => {
   const completeLogin = (wallet_address: string, userData: User) => {
     setAccount(wallet_address);
     setUser(userData);
-
-    // Save to localStorage for persistence
     localStorage.setItem("stellar_user", JSON.stringify(userData));
     localStorage.setItem("stellar_wallet", wallet_address);
-
-    // Redirect to dashboard
     navigate("/dashboard");
   };
 
@@ -204,324 +153,255 @@ const Login = () => {
   };
 
   return (
-    <>
-      {/* Username Modal */}
-      {showUsernameModal && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-5"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              // Don't allow closing by clicking outside - username is required
-            }
-          }}
-        >
-          <div
-            className="bg-white shadow-2xl p-8 max-w-md w-full"
-            style={{ borderRadius: "8px" }}
-          >
-            <h2
-              className="text-2xl font-bold mb-4"
-              style={{ color: colors.darkRed }}
-            >
-              Choose Your Username
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Please enter a username to continue. This will be displayed on your profile and tests.
-            </p>
+    <div 
+      className="min-h-screen flex items-center justify-center p-5 overflow-hidden relative" 
+      style={{ 
+        background: `linear-gradient(135deg, ${colors.blueLight} 0%, ${colors.purpleLight} 100%)`,
+        backgroundImage: `
+          radial-gradient(circle, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+          linear-gradient(135deg, ${colors.blueLight} 0%, ${colors.purpleLight} 100%)
+        `,
+        backgroundSize: '20px 20px, 100% 100%'
+      }}
+    >
+      {/* Login Card - Slides out to the right when username form appears */}
+      <div 
+        className={`max-w-lg w-full absolute transition-transform duration-300 ease ${
+          showUsernameModal 
+            ? 'translate-x-[160%]' 
+            : 'translate-x-0'
+        }`}
+        style={{ pointerEvents: showUsernameModal ? 'none' : 'auto' }}
+      >
+        <Card className="max-w-lg w-full" style={{ boxShadow: '8px 8px 0px 0px #000000' }}>
+          <CardHeader style={{ backgroundColor: colors.yellowLight }}>
+            <div className="flex items-center justify-center mb-3">
+              <div className="w-14 h-14 border-4 border-border rounded-base flex items-center justify-center" style={{ backgroundColor: colors.orange }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 12L10 8L14 12L10 16L6 12Z" fill="white" />
+                  <path d="M14 12L18 8L22 12L18 16L14 12Z" fill="white" opacity="0.8" />
+                </svg>
+              </div>
+            </div>
+            <CardTitle className="text-center text-3xl">Stellar Skills</CardTitle>
+            <CardDescription className="text-center">
+              Connect your Freighter wallet to get started
+            </CardDescription>
+          </CardHeader>
 
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter username..."
-              maxLength={20}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-md mb-2 focus:outline-none focus:border-blue-500"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleUsernameSubmit();
-                }
-              }}
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 mb-4">
-              3-20 characters • Letters, numbers, and underscores
-            </p>
+          <CardContent className="space-y-3">
+            <Card className={`shadow-shadow ${freighterStatus === "Detected" ? "" : freighterStatus === "Not installed" ? "" : ""}`} style={{ backgroundColor: freighterStatus === "Detected" ? colors.greenLight : freighterStatus === "Not installed" ? colors.redLight : colors.yellowLight }}>
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-heading">Freighter Status:</span>
+                  <span className="text-sm font-bold">
+                    {freighterStatus === "Detected" && "Detected"}
+                    {freighterStatus === "Not installed" && "Not Installed"}
+                    {freighterStatus === "Checking..." && "Checking..."}
+                  </span>
+                </div>
+                {freighterStatus === "Not installed" && (
+                  <Button variant="neutral" size="sm" onClick={() => { setFreighterStatus("Checking..."); checkFreighterStatus(); }} className="w-full mt-3">
+                    Re-check for Freighter
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
 
-            {error && (
-              <div
-                className="border p-3 mb-4"
+            {!account ? (
+              <Button 
+                className="w-full shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[-6px_-6px_0px_0px_rgba(0,0,0,1)] active:translate-x-[12px] active:translate-y-[12px] transition-all duration-150" 
+                size="lg" 
+                onClick={connectWallet} 
+                disabled={loading || freighterStatus !== "Detected"}
                 style={{
-                  backgroundColor: colors.lightPink,
-                  borderColor: colors.rose,
-                  color: colors.darkRed,
-                  borderRadius: "6px",
+                  backgroundColor: error ? '#DC2626' : loading ? '#00c97fff' : undefined,
+                  borderColor: error ? '#DC2626' : loading ? '#00c97fff' : undefined,
+                  color: error || loading ? 'white' : undefined
                 }}
               >
-                {error}
+                {loading ? "Connecting..." : freighterStatus !== "Detected" ? "Install Freighter First" : "Connect Wallet"}
+              </Button>
+            ) : (
+              <div className="space-y-4">
+                <Card style={{ backgroundColor: colors.cyanLight }}>
+                  <CardContent className="py-4 space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b-2 border-border">
+                      <span className="font-heading text-sm">Connected Wallet:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{formatAddress(account)}</span>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={copyAddressToClipboard}
+                          className="h-8 w-8 p-0"
+                        >
+                          {copySuccess ? (
+                            <span className="text-xs">✓</span>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    {user && (
+                      <>
+                        {user.username && (
+                          <div className="flex justify-between items-center py-2 border-b-2 border-border">
+                            <span className="font-heading text-sm">Username:</span>
+                            <span className="font-bold text-sm">{user.username}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center py-2 border-b-2 border-border">
+                          <span className="font-heading text-sm">User ID:</span>
+                          <span className="font-mono text-xs">{user.id}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b-2 border-border">
+                          <span className="font-heading text-sm">Joined:</span>
+                          <span className="font-mono text-sm">{new Date(user.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2">
+                          <span className="font-heading text-sm">Last Login:</span>
+                          <span className="font-mono text-sm">{new Date(user.last_login).toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+                <Button variant="reverse" className="w-full" onClick={disconnectWallet}>
+                  Disconnect
+                </Button>
               </div>
             )}
 
-            <button
-              onClick={handleUsernameSubmit}
-              disabled={loading || !username.trim()}
-              className="w-full text-white font-semibold py-3 px-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
-                borderRadius: "6px",
-              }}
-            >
-              {loading ? "Setting Username..." : "Continue"}
-            </button>
-          </div>
-        </div>
-      )}
+            <Card className="shadow-shadow" style={{ backgroundColor: colors.purpleLight }}>
+              <CardContent className="py-3">
+                <p className="text-sm leading-relaxed">
+                  <strong className="font-heading">Note:</strong> Make sure you have
+                  Freighter wallet extension installed in your browser. Download from{" "}
+                  <a href="https://www.freighter.app/" target="_blank" rel="noopener noreferrer" className="underline font-bold">
+                    freighter.app
+                  </a>
+                </p>
+              </CardContent>
+            </Card>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Main Login Page */}
-      <div
-        className="min-h-screen flex items-center justify-center p-5"
-        style={{
-          background: `linear-gradient(135deg, ${colors.blue} 0%, ${colors.lightBlue} 50%, ${colors.lightMint} 100%)`,
-        }}
+      {/* Username Form - Slides in from the left when needed */}
+      <div 
+        className={`max-w-lg w-full absolute transition-transform duration-300 ease ${
+          showUsernameModal 
+            ? 'translate-x-0' 
+            : '-translate-x-[calc(100%+100vw)]'
+        }`}
+        style={{ pointerEvents: showUsernameModal ? 'auto' : 'none' }}
       >
-      <div
-        className="bg-white shadow-2xl p-10 max-w-lg w-full animate-fade-in"
-        style={{ borderRadius: "8px" }}
-      >
-        <div className="flex items-center justify-center mb-4">
-          <svg
-            width="46"
-            height="46"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden
-          >
-            <rect width="24" height="24" rx="6" fill="#FFEFD5" />
-            <path d="M6 12L10 8L14 12L10 16L6 12Z" fill="#FF7A00" />
-          </svg>
-        </div>
-        <h1
-          className="text-3xl font-bold text-center mb-2"
-          style={{ color: colors.darkRed }}
-        >
-          Stellar Skills
-        </h1>
-        <p className="text-center text-gray-600 mb-8 text-base">
-          Connect your Freighter wallet to get started
-        </p>
-
-        {/* Freighter Status Indicator */}
-        <div
-          className="p-3 mb-4"
-          style={{
-            backgroundColor:
-              freighterStatus === "Detected"
-                ? colors.lightMint
-                : freighterStatus === "Not installed"
-                ? colors.lightPink
-                : colors.lightYellow,
-            borderRadius: "6px",
-            border: `1px solid ${
-              freighterStatus === "Detected"
-                ? "#059669"
-                : freighterStatus === "Not installed"
-                ? colors.rose
-                : colors.gold
-            }`,
-          }}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
-              Freighter Status:
-            </span>
-            <span
-              className="text-sm font-bold"
-              style={{
-                color:
-                  freighterStatus === "Detected"
-                    ? "#059669"
-                    : freighterStatus === "Not installed"
-                    ? colors.darkRed
-                    : colors.orange,
-              }}
-            >
-              {freighterStatus === "Detected" && "✅ Detected"}
-              {freighterStatus === "Not installed" && "❌ Not Installed"}
-              {freighterStatus === "Checking..." && "⏳ Checking..."}
-              {freighterStatus === "Waiting for extension..." &&
-                "⏳ Loading..."}
-            </span>
-          </div>
-
-          {freighterStatus === "Not installed" && (
-            <button
-              onClick={() => {
-                setFreighterStatus("Checking...");
-                checkFreighterStatus();
-              }}
-              className="w-full text-sm font-semibold py-2 px-4 mt-2"
-              style={{
-                backgroundColor: colors.blue,
-                color: "white",
-                borderRadius: "4px",
-                border: "none",
-              }}
-            >
-              🔄 Re-check for Freighter
-            </button>
-          )}
-        </div>
-
-        {error && (
-          <div
-            className="border p-3 mb-5 flex items-center gap-2"
-            style={{
-              backgroundColor: colors.lightPink,
-              borderColor: colors.rose,
-              color: colors.darkRed,
-              borderRadius: "6px",
-            }}
-            role="alert"
-            aria-live="assertive"
-          >
-            <span>{error}</span>
-          </div>
-        )}
-
-        {!account ? (
-          <button
-            className="w-full text-white font-semibold py-4 px-6 text-base shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed mb-5"
-            style={{
-              background: `linear-gradient(135deg, ${colors.orange} 0%, ${colors.gold} 100%)`,
-              borderRadius: "6px",
-            }}
-            onClick={connectWallet}
-            disabled={loading || freighterStatus !== "Detected"}
-          >
-            {loading
-              ? "Connecting..."
-              : freighterStatus !== "Detected"
-              ? "Install Freighter First"
-              : "Connect Wallet"}
-          </button>
-        ) : (
-          <div className="mb-5">
-            <div
-              className="p-5 mb-5"
-              style={{ backgroundColor: colors.cream, borderRadius: "6px" }}
-            >
-              <div className="flex justify-between py-2.5 border-b border-gray-200">
-                <span className="font-semibold text-gray-700">
-                  Connected Wallet:
-                </span>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="font-mono text-sm"
-                    style={{ color: colors.blue }}
-                  >
-                    {formatAddress(account)}
-                  </span>
-                  <button
-                    onClick={copyAddressToClipboard}
-                    className="text-xs px-2 py-1 bg-white border rounded text-gray-700"
-                    aria-label="Copy full wallet address"
-                    title="Copy full wallet address"
-                  >
-                    Copy
-                  </button>
-                  {copySuccess && (
-                    <span className="text-xs text-green-600">
-                      {copySuccess}
-                    </span>
-                  )}
-                </div>
+        <Card className="w-full" style={{ boxShadow: '8px 8px 0px 0px #000000' }}>
+          <CardHeader style={{ backgroundColor: colors.greenLight }}>
+            <div className="flex items-center justify-center mb-3">
+              <div className="w-14 h-14 border-4 border-border rounded-base flex items-center justify-center" style={{ backgroundColor: colors.blue }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="7" r="4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-              {user && (
-                <>
-                  {user.username && (
-                    <div className="flex justify-between py-2.5 border-b border-gray-200">
-                      <span className="font-semibold text-gray-700">
-                        Username:
-                      </span>
-                      <span
-                        className="font-semibold text-sm"
-                        style={{ color: colors.orange }}
-                      >
-                        {user.username}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-2.5 border-b border-gray-200">
-                    <span className="font-semibold text-gray-700">
-                      User ID:
-                    </span>
-                    <span
-                      className="font-mono text-sm"
-                      style={{ color: colors.blue }}
-                    >
-                      {user.id}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2.5 border-b border-gray-200">
-                    <span className="font-semibold text-gray-700">Joined:</span>
-                    <span
-                      className="font-mono text-sm"
-                      style={{ color: colors.blue }}
-                    >
-                      {new Date(user.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2.5">
-                    <span className="font-semibold text-gray-700">
-                      Last Login:
-                    </span>
-                    <span
-                      className="font-mono text-sm"
-                      style={{ color: colors.blue }}
-                    >
-                      {new Date(user.last_login).toLocaleString()}
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
-            <button
-              className="w-full bg-gray-100 text-gray-700 font-semibold py-4 px-6 border border-gray-300 hover:bg-gray-200 hover:border-gray-400 transition-all duration-200"
-              style={{ borderRadius: "6px" }}
-              onClick={disconnectWallet}
-            >
-              Disconnect
-            </button>
-          </div>
-        )}
+            <CardTitle className="text-center text-3xl">Choose Username</CardTitle>
+            <CardDescription className="text-center">
+              Pick a unique username for your profile
+            </CardDescription>
+          </CardHeader>
 
-        <div
-          className="border-l-4 p-4"
-          style={{
-            backgroundColor: colors.lightYellow,
-            borderColor: colors.gold,
-            color: "#854d0e",
-            borderRadius: "6px",
-          }}
-        >
-          <p className="m-0 leading-relaxed">
-            <strong className="text-gray-900">Note:</strong> Make sure you have
-            Freighter wallet extension installed in your browser. Download from{" "}
-            <a
-              href="https://www.freighter.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: colors.blue, textDecoration: "underline" }}
-            >
-              freighter.app
-            </a>
-          </p>
-        </div>
+          <CardContent className="space-y-4 pt-6">
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-sm font-heading font-bold">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username..."
+                maxLength={20}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') handleUsernameSubmit();
+                }}
+                autoFocus
+                className="w-full px-4 py-3 border-2 border-border rounded-base text-base font-base focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-main focus:ring-blue transition-shadow shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+                style={{ 
+                  backgroundColor: 'white',
+                  transition: 'all 0.2s'
+                }}
+              />
+              <div className="flex items-center gap-2 px-3 py-2 border-2 border-border rounded-base" style={{ backgroundColor: colors.yellowLight }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                <p className="text-xs">
+                  3-20 characters • Letters, numbers, and underscores
+                </p>
+              </div>
+            </div>
+
+            {error && showUsernameModal && (
+              <Card className="shadow-shadow" style={{ backgroundColor: colors.redLight }}>
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    <p className="text-sm font-base">{error}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowUsernameModal(false);
+                  setUsername("");
+                  setError("");
+                  cleanupLoginState();
+                }}
+                disabled={loading}
+                className="w-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUsernameSubmit} 
+                disabled={loading || !username.trim() || username.trim().length < 3}
+                className="w-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] transition-all"
+                style={{
+                  backgroundColor: loading ? colors.blue : undefined,
+                  borderColor: loading ? colors.blue : undefined,
+                }}
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    Setting...
+                  </span>
+                ) : "Continue"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
-    </>
   );
 };
 

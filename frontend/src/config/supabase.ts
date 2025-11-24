@@ -18,6 +18,12 @@ export interface User {
   last_login: string;
 }
 
+interface CustomBadge {
+  id: string;
+  badge_name: string;
+  svg_url: string;
+}
+
 export interface Test {
   id: string;
   creator_wallet: string;
@@ -25,7 +31,10 @@ export interface Test {
   description?: string;
   company?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  custom_badge_id?: string;
+  custom_badge?: CustomBadge | null;
   metadata_cid?: string;
+  contract_address?: string;
   start_time: string;
   end_time: string;
   pass_score: number;
@@ -46,11 +55,13 @@ export interface Question {
   id: string;
   test_id: string;
   question_text: string;
+  question_type: 'multiple_choice' | 'true_false' | 'one_word';
+  num_options?: 2 | 3 | 4;
   option_a: string;
   option_b: string;
-  option_c: string;
-  option_d: string;
-  correct_answer: 'A' | 'B' | 'C' | 'D';
+  option_c?: string;
+  option_d?: string;
+  correct_answer: string;
   points: number;
   created_at: string;
 }
