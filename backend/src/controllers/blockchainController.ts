@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
-import { registerTestOnChain } from '../services/registryService';
-import { mintBadgeNFT } from '../services/nftService';
+import { buildRegisterTestTransaction } from '../services/testRegistryService';
+import { buildMintNFTTransaction } from '../services/badgeNFTService';
+import { generateBadgeMetadata, uploadBadgeMetadata } from '../services/storageService';
 
 /**
- * Register a test on the blockchain
+ * Build unsigned transaction for test registration
+ * Frontend will sign and submit with Freighter
  */
-export const registerTest = async (req: Request, res: Response) => {
+export const buildRegisterTestTx = async (req: Request, res: Response) => {
   try {
     const { testId, creator, metadataCid } = req.body;
 
@@ -15,27 +17,28 @@ export const registerTest = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await registerTestOnChain(testId, creator, metadataCid);
+    const xdr = await buildRegisterTestTransaction(testId, creator, metadataCid);
 
     return res.json({
       success: true,
-      message: 'Test registered on blockchain',
-      data: result
+      message: 'Transaction built successfully',
+      data: { xdr }
     });
 
   } catch (error: any) {
-    console.error('Blockchain registration error:', error);
+    console.error('Build transaction error:', error);
     return res.status(500).json({
-      error: 'Failed to register test on blockchain',
+      error: 'Failed to build transaction',
       details: error.message
     });
   }
 };
 
 /**
- * Mint a badge NFT
+ * Build unsigned transaction for NFT minting
+ * Frontend will sign and submit with Freighter
  */
-export const mintNFT = async (req: Request, res: Response) => {
+export const buildMintNFTTx = async (req: Request, res: Response) => {
   try {
     const { receiver, testId, testTitle, score, totalScore } = req.body;
 
@@ -45,24 +48,23 @@ export const mintNFT = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await mintBadgeNFT(
-      receiver,
-      testId,
-      testTitle,
-      score,
-      totalScore
-    );
+    // Generate and upload metadata first
+    const metadata = generateBadgeMetadata(testId, receiver, testTitle, score, totalScore);
+    const metadataUrl = await uploadBadgeMetadata(testId, receiver, metadata);
+
+    // Build transaction with metadata URL
+    const xdr = await buildMintNFTTransaction(receiver, testId, metadataUrl);
 
     return res.json({
       success: true,
-      message: 'NFT badge minted successfully',
-      data: result
+      message: 'Transaction built successfully',
+      data: { xdr, metadataUrl }
     });
 
   } catch (error: any) {
-    console.error('NFT minting error:', error);
+    console.error('Build transaction error:', error);
     return res.status(500).json({
-      error: 'Failed to mint NFT badge',
+      error: 'Failed to build transaction',
       details: error.message
     });
   }

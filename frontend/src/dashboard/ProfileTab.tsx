@@ -19,6 +19,10 @@ interface ProfileTabProps {
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({ userId }) => {
+  const [username, setUsername] = useState('');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [createdAt, setCreatedAt] = useState('');
+  const [lastLogin, setLastLogin] = useState('');
   const [badgeName, setBadgeName] = useState('');
   const [svgFile, setSvgFile] = useState<File | null>(null);
   const [svgPreview, setSvgPreview] = useState<string | null>(null);
@@ -27,10 +31,34 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ userId }) => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [copiedUserId, setCopiedUserId] = useState(false);
+  const [copiedWallet, setCopiedWallet] = useState(false);
 
   useEffect(() => {
+    fetchUserProfile();
     fetchCustomBadges();
   }, [userId]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('username, wallet_address, created_at, last_login')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setUsername(data.username || '');
+        setWalletAddress(data.wallet_address || '');
+        setCreatedAt(data.created_at || '');
+        setLastLogin(data.last_login || '');
+      }
+    } catch (err: any) {
+      console.error('Error fetching user profile:', err);
+    }
+  };
 
   const fetchCustomBadges = async () => {
     try {
@@ -149,7 +177,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ userId }) => {
         throw dbError;
       }
 
-      setSuccess('Badge created successfully! 🎉');
+      setSuccess('Badge created successfully!');
       setBadgeName('');
       setSvgFile(null);
       setSvgPreview(null);
@@ -205,6 +233,121 @@ const ProfileTab: React.FC<ProfileTabProps> = ({ userId }) => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
+      {/* User Profile Information */}
+      <Card style={{ backgroundColor: colors.blueLight }} className="border-2 shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] border-black">
+        <CardHeader>
+          <CardTitle>Profile Information</CardTitle>
+          <CardDescription>Your account details and statistics</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Username */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">Username</Label>
+              <div className="p-3 rounded-base border-2 border-black bg-white">
+                <p className="font-mono text-sm font-bold" style={{ color: colors.blue }}>
+                  {username || 'Not set'}
+                </p>
+              </div>
+            </div>
+
+            {/* User ID */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">User ID</Label>
+              <div className="p-3 rounded-base border-2 border-black bg-white flex items-center justify-between gap-2">
+                <p className="font-mono text-xs font-bold truncate" style={{ color: colors.blue }}>
+                  {userId ? `${userId.substring(0, 8)}...${userId.substring(userId.length - 8)}` : 'Not available'}
+                </p>
+                {userId && (
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(userId);
+                      setCopiedUserId(true);
+                      setTimeout(() => setCopiedUserId(false), 1000);
+                    }}
+                    className="p-1 rounded border-2 border-black hover:bg-black hover:text-white transition-colors flex-shrink-0"
+                    title="Copy user ID"
+                  >
+                    {copiedUserId ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Wallet Address */}
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-bold">Stellar Wallet Address</Label>
+              <div className="p-3 rounded-base border-2 border-black bg-white flex items-center justify-between gap-2">
+                <p className="font-mono text-xs font-bold break-all" style={{ color: colors.blue }}>
+                  {walletAddress || 'Not available'}
+                </p>
+                {walletAddress && (
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(walletAddress);
+                      setCopiedWallet(true);
+                      setTimeout(() => setCopiedWallet(false), 1000);
+                    }}
+                    className="p-1 rounded border-2 border-black hover:bg-black hover:text-white transition-colors flex-shrink-0"
+                    title="Copy wallet address"
+                  >
+                    {copiedWallet ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Account Created */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">Account Created</Label>
+              <div className="p-3 rounded-base border-2 border-black bg-white">
+                <p className="text-sm font-bold" style={{ color: colors.blue }}>
+                  {createdAt ? new Date(createdAt).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : 'Not available'}
+                </p>
+              </div>
+            </div>
+
+            {/* Last Login */}
+            <div className="space-y-2">
+              <Label className="text-sm font-bold">Last Login</Label>
+              <div className="p-3 rounded-base border-2 border-black bg-white">
+                <p className="text-sm font-bold" style={{ color: colors.blue }}>
+                  {lastLogin ? new Date(lastLogin).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : 'Not available'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Create Badge Section */}
       <Card style={{ backgroundColor: colors.purpleLight }} className="border-2 shadow-[-4px_-4px_0px_0px_rgba(0,0,0,1)] border-black">
         <CardHeader>

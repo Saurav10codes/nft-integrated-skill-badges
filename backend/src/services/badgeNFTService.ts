@@ -1,177 +1,106 @@
+/**
+ * Badge NFT Service - Real Stellar Contract Integration
+ * This service builds unsigned transactions for NFT minting
+ * Frontend will sign and submit these transactions using Freighter wallet
+ */
+
 import * as StellarSDK from '@stellar/stellar-sdk';
 import type { NFTMintResult } from '../types/blockchain';
 
 // Contract configuration
-const NETWORK = process.env.STELLAR_NETWORK || 'TESTNET';
+const NETWORK = (process.env.STELLAR_NETWORK || 'TESTNET').toUpperCase();
 const BADGE_NFT_CONTRACT = process.env.BADGE_NFT_CONTRACT_ID;
-const RPC_URL = NETWORK === 'TESTNET' 
-  ? 'https://soroban-testnet.stellar.org' 
-  : 'https://soroban-mainnet.stellar.org';
-
-const server = new StellarSDK.SorobanRpc.Server(RPC_URL);
+const RPC_URL = process.env.STELLAR_RPC_URL || 'https://soroban-testnet.stellar.org:443';
+const NETWORK_PASSPHRASE = NETWORK === 'TESTNET' 
+  ? StellarSDK.Networks.TESTNET 
+  : StellarSDK.Networks.PUBLIC;
 
 /**
- * Mint a badge NFT on the Stellar blockchain
+ * Build an unsigned transaction for NFT minting
+ * Frontend will sign this with Freighter and submit to network
  */
-export const mintBadgeNFT = async (
+export const buildMintNFTTransaction = async (
   receiver: string,
   testId: string,
-  metadataUri: string,
-  signerKeypair?: Keypair
-): Promise<NFTMintResult> => {
+  metadataUri: string
+): Promise<string> => {
   try {
-    console.log('🎖️ Minting badge NFT...', {
+    console.log('🎖️ Building NFT mint transaction...', {
       receiver,
       testId,
       metadataUri,
-      contractId: BADGE_NFT_CONTRACT,
-      network: NETWORK
+      contractId: BADGE_NFT_CONTRACT
     });
 
-    // Simulation mode if no signer provided
-    if (!signerKeypair) {
-      console.log('⚠️  No signer keypair provided - running in simulation mode');
-      
-      const tokenId = `nft_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      const txHash = `sim_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      
-      return {
-        success: true,
-        txHash,
-        tokenId,
-        metadataUrl: metadataUri
-      };
+    if (!BADGE_NFT_CONTRACT) {
+      throw new Error('BADGE_NFT_CONTRACT_ID not configured');
     }
 
-    // Real blockchain interaction
+    // Create Soroban RPC server for simulation
+    const rpcServer = new StellarSDK.rpc.Server(RPC_URL);
+
+    // Create a fresh Horizon server instance for this request
+    const horizonServer = new StellarSDK.Horizon.Server(
+      NETWORK === 'TESTNET' 
+        ? 'https://horizon-testnet.stellar.org' 
+        : 'https://horizon.stellar.org'
+    );
+
+    // Load the receiver's account
+    let account;
+    try {
+      console.log('🔍 Loading account from Horizon:', receiver);
+      account = await horizonServer.loadAccount(receiver);
+      console.log('✅ Account loaded successfully, sequence:', account.sequence);
+    } catch (error: any) {
+      console.error('❌ Failed to load account:', error);
+      if (error.response && error.response.status === 404) {
+        throw new Error(`Account not found on Stellar testnet. Please fund your account first at: https://laboratory.stellar.org/#account-creator?network=test`);
+      }
+      throw error;
+    }
+
+    // Build contract instance
     const contract = new StellarSDK.Contract(BADGE_NFT_CONTRACT);
-    
-    // Load account
-    const sourceAccount = await server.getAccount(signerKeypair.publicKey());
-    
-    // Build transaction to mint NFT
-    const transaction = new StellarSDK.TransactionBuilder(sourceAccount, {
+
+    // Build the transaction
+    let transaction = new StellarSDK.TransactionBuilder(account, {
       fee: StellarSDK.BASE_FEE,
-      networkPassphrase: NETWORK === 'TESTNET' ? StellarSDK.Networks.TESTNET : StellarSDK.Networks.PUBLIC
+      networkPassphrase: NETWORK_PASSPHRASE
     })
       .addOperation(
         contract.call(
-          'mint',
+          'mint_badge',
           StellarSDK.nativeToScVal(receiver, { type: 'address' }),
+          StellarSDK.nativeToScVal(testId, { type: 'string' }),
           StellarSDK.nativeToScVal(metadataUri, { type: 'string' })
         )
       )
-      .setTimeout(30)
+      .setTimeout(180)
       .build();
 
-    // Simulate transaction first
-    const simulated = await server.simulateTransaction(transaction);
+    console.log('🔄 Simulating transaction on Soroban RPC...');
     
-    if (StellarSDK.SorobanRpc.Api.isSimulationError(simulated)) {
-      throw new Error(`Simulation failed: ${simulated.error}`);
-    }
-
-    // Prepare and sign transaction
-    const preparedTx = StellarSDK.SorobanRpc.assembleTransaction(transaction, simulated).build();
-    preparedTx.sign(signerKeypair);
-
-    // Submit transaction
-    const txResponse = await server.sendTransaction(preparedTx);
+    // Simulate the transaction to get resource estimates
+    const simulatedTx = await rpcServer.simulateTransaction(transaction);
     
-    if (txResponse.status === 'ERROR') {
-      throw new Error(`Transaction failed: ${txResponse.errorResult}`);
+    if (StellarSDK.rpc.Api.isSimulationSuccess(simulatedTx)) {
+      console.log('✅ Simulation successful');
+      // Assemble the transaction with simulation results
+      transaction = StellarSDK.rpc.assembleTransaction(transaction, simulatedTx).build();
+    } else {
+      console.error('❌ Simulation failed:', simulatedTx);
+      throw new Error(`Transaction simulation failed: ${simulatedTx.error || 'Unknown error'}`);
     }
 
-    // Wait for confirmation
-    let txHash = txResponse.hash;
-    let status = txResponse.status;
-    let attempts = 0;
-    const maxAttempts = 30;
-
-    while (status === 'PENDING' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const statusResponse = await server.getTransaction(txHash);
-      status = statusResponse.status;
-      attempts++;
-    }
-
-    if (status !== 'SUCCESS') {
-      throw new Error(`Transaction failed with status: ${status}`);
-    }
-
-    // Extract token ID from transaction result
-    const txResult = await server.getTransaction(txHash);
-    let tokenId = `nft_${testId}_${Date.now()}`;
+    // Return XDR for frontend to sign
+    const xdr = transaction.toXDR();
+    console.log('✅ Transaction built successfully');
     
-    if (txResult.status === 'SUCCESS' && txResult.resultMetaXdr) {
-      try {
-        // Parse the result to get the minted token ID
-        // This depends on your contract's return value
-        const resultValue = txResult.returnValue;
-        if (resultValue) {
-          tokenId = StellarSDK.scValToNative(resultValue);
-        }
-      } catch (e) {
-        console.warn('Could not parse token ID from result, using generated ID');
-      }
-    }
-
-    console.log('✅ Badge NFT successfully minted');
-    console.log(`🔗 TX Hash: ${txHash}`);
-    console.log(`🎖️  Token ID: ${tokenId}`);
-
-    return {
-      success: true,
-      txHash,
-      tokenId,
-      metadataUrl: metadataUri
-    };
+    return xdr;
 
   } catch (error: any) {
-    console.error('❌ Error minting badge NFT:', error);
-    throw new Error(`NFT minting failed: ${error.message}`);
-  }
-};
-
-/**
- * Get NFT metadata from blockchain
- */
-export const getNFTMetadata = async (tokenId: string): Promise<string | null> => {
-  try {
-    const contract = new StellarSDK.Contract(BADGE_NFT_CONTRACT);
-    const dummyKeypair = StellarSDK.Keypair.random();
-    
-    const account = await server.getAccount(dummyKeypair.publicKey()).catch(() => {
-      return {
-        accountId: () => dummyKeypair.publicKey(),
-        sequenceNumber: () => '0',
-        incrementSequenceNumber: () => {}
-      } as any;
-    });
-
-    const transaction = new StellarSDK.TransactionBuilder(account, {
-      fee: StellarSDK.BASE_FEE,
-      networkPassphrase: NETWORK === 'TESTNET' ? StellarSDK.Networks.TESTNET : StellarSDK.Networks.PUBLIC
-    })
-      .addOperation(
-        contract.call(
-          'get_token_uri',
-          StellarSDK.nativeToScVal(tokenId, { type: 'string' })
-        )
-      )
-      .setTimeout(30)
-      .build();
-
-    const simulated = await server.simulateTransaction(transaction);
-    
-    if (StellarSDK.SorobanRpc.Api.isSimulationError(simulated) || !simulated.result) {
-      return null;
-    }
-
-    return StellarSDK.scValToNative(simulated.result.retval);
-
-  } catch (error: any) {
-    console.error('❌ Error getting NFT metadata:', error);
-    return null;
+    console.error('❌ Error building NFT mint transaction:', error);
+    throw new Error(`Failed to build transaction: ${error.message}`);
   }
 };

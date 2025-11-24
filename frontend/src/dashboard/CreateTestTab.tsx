@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { colors } from '../config/colors';
 import { supabase } from '../config/supabase';
 import { getContractExplorerUrl, CONTRACT_IDS } from '../utils/sorobanSimple';
-import { registerTestViaBackend } from '../utils/backendApi';
+import { registerTestOnBlockchain } from '../utils/realBlockchain';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
+import { AccountStatusBanner } from '../components/AccountStatusBanner';
 
 interface Question {
   question_text: string;
@@ -202,6 +203,30 @@ const CreateTestTab = ({ walletAddress }: CreateTestTabProps) => {
       return;
     }
 
+    // Validate date/time
+    const now = new Date();
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    
+    // Check if start time is in the past
+    if (start < now) {
+      setError('Start time cannot be in the past');
+      return;
+    }
+    
+    // Check if end time is before start time
+    if (end <= start) {
+      setError('End time must be after start time');
+      return;
+    }
+    
+    // Check if test duration is at least 2 minutes
+    const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
+    if (durationMinutes < 2) {
+      setError('Test duration must be at least 2 minutes');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -245,37 +270,68 @@ const CreateTestTab = ({ walletAddress }: CreateTestTabProps) => {
         throw questionsError;
       }
 
-      console.log('✅ Questions inserted successfully');
+      console.log('Questions inserted successfully');
 
-      // Register test on Stellar blockchain via backend
+      // Register test on Stellar blockchain
+      let blockchainSuccess = false;
+      let txHash = '';
+      
       try {
-        console.log('🚀 Registering test on Stellar blockchain via backend...');
+        console.log('=== STARTING BLOCKCHAIN REGISTRATION ===');
+        console.log('Registering test on Stellar blockchain...');
         const metadataUri = `${testData.id}.json`; // Simplified metadata reference
         
-        const blockchainResult = await registerTestViaBackend(
+        const blockchainResult = await registerTestOnBlockchain(
           testData.id,
           walletAddress,
           metadataUri
         );
 
-        console.log('✅ Test registered on blockchain:', blockchainResult);
-        console.log(`📝 View on Stellar Explorer: ${getContractExplorerUrl(CONTRACT_IDS.TEST_REGISTRY!)}`);
+        console.log('✅ SUCCESS: Test registered on blockchain:', blockchainResult);
+        console.log(`View on Stellar Explorer: ${getContractExplorerUrl(CONTRACT_IDS.TEST_REGISTRY!)}`);
 
-        // Update test with blockchain metadata
-        await supabase
-          .from('tests')
-          .update({
-            metadata_cid: metadataUri,
-            // You could also store the transaction hash if you add a column
-          })
-          .eq('id', testData.id);
+        blockchainSuccess = true;
+        txHash = blockchainResult.txHash;
 
-        console.log('✅ Blockchain metadata updated');
+        // Update test with blockchain metadata and contract address
+        try {
+          console.log('Updating database with blockchain metadata...');
+          const { error: updateError } = await supabase
+            .from('tests')
+            .update({
+              metadata_cid: metadataUri,
+              contract_address: CONTRACT_IDS.TEST_REGISTRY,
+            })
+            .eq('id', testData.id);
+
+          if (updateError) {
+            console.error('⚠️ Database update error:', updateError);
+          } else {
+            console.log('✅ Blockchain metadata updated in database');
+          }
+        } catch (updateError) {
+          console.error('⚠️ Failed to update blockchain metadata in database:', updateError);
+          // Non-critical error, blockchain registration still succeeded
+        }
         
-        setSuccess(`Test created successfully and registered on Stellar blockchain! Transaction: ${blockchainResult.data.txHash}`);
+        console.log('=== BLOCKCHAIN REGISTRATION COMPLETE ===');
+        setSuccess(`✅ Test created successfully and registered on Stellar blockchain! Transaction: ${txHash}`);
       } catch (blockchainError: any) {
-        console.error('⚠️ Failed to register on blockchain:', blockchainError);
-        setSuccess('Test created successfully in database (blockchain registration failed - you can retry later)');
+        console.error('❌ BLOCKCHAIN REGISTRATION FAILED:', blockchainError);
+        console.error('Error details:', {
+          message: blockchainError.message,
+          stack: blockchainError.stack,
+          response: blockchainError.response
+        });
+        
+        // Check if it's an account not found error
+        if (blockchainError.message && blockchainError.message.includes('Account not found')) {
+          setError(`Blockchain Error: ${blockchainError.message}`);
+          return; // Don't reset form on account error
+        } else {
+          // Test was created in database, but blockchain registration failed
+          setSuccess('⚠️ Test created successfully in database (blockchain registration failed - you can retry later)');
+        }
       }
 
       // Reset form
@@ -297,6 +353,9 @@ const CreateTestTab = ({ walletAddress }: CreateTestTabProps) => {
 
   return (
     <div className="max-w-4xl">
+      {/* Account Status Banner */}
+      <AccountStatusBanner walletAddress={walletAddress} />
+      
       {error && (
         <Card className="mb-4 border-4" style={{ backgroundColor: colors.pinkLight, borderColor: colors.red }}>
           <CardContent className="py-4">
@@ -447,6 +506,7 @@ const CreateTestTab = ({ walletAddress }: CreateTestTabProps) => {
                   type="datetime-local"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
                   required
                 />
               </div>
@@ -457,6 +517,7 @@ const CreateTestTab = ({ walletAddress }: CreateTestTabProps) => {
                   type="datetime-local"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
+                  min={startTime || new Date().toISOString().slice(0, 16)}
                   required
                 />
               </div>

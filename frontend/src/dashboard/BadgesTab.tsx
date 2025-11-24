@@ -3,7 +3,7 @@ import { colors } from '../config/colors';
 import { supabase, type Badge, type Test, type Attempt } from '../config/supabase';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { mintNFTViaBackend } from '../utils/backendApi';
+import { mintNFTOnBlockchain } from '../utils/realBlockchain';
 import { getContractExplorerUrl, CONTRACT_IDS } from '../utils/sorobanSimple';
 
 interface BadgeWithTest extends Badge {
@@ -66,7 +66,20 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
       console.log('Badges data:', badgesData?.length);
       console.log('Badges:', badgesData);
       
-      // Log detailed badge information
+      // Log detailed badge and attempt information
+      console.log('=== ATTEMPTS BREAKDOWN ===');
+      attemptsData?.forEach((attempt, index) => {
+        const hasBadge = badgesData?.some(b => b.test_id === attempt.test_id);
+        console.log(`Attempt ${index + 1} (ID: ${attempt.id}):`, {
+          test_id: attempt.test_id,
+          passed: attempt.passed,
+          percentage: attempt.percentage,
+          created_at: attempt.created_at,
+          has_badge: hasBadge
+        });
+      });
+      
+      console.log('=== BADGES BREAKDOWN ===');
       badgesData?.forEach((badge, index) => {
         console.log(`Badge ${index + 1}:`, {
           id: badge.id,
@@ -99,16 +112,40 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
           test: testsData?.find(t => t.id === badge.test_id)
         }));
 
-        // Show ALL attempts (including those that earned badges)
-        const practiceAttemptsWithTests: PracticeAttempt[] = (attemptsData || [])
+        // For each badge, find the corresponding attempt that earned it
+        // Match by test_id and timestamp (badge created within 30 seconds of attempt)
+        const badgeAttemptIds = new Set<string>();
+        
+        badgesData?.forEach(badge => {
+          const badgeTime = new Date(badge.created_at).getTime();
+          
+          // Find attempt for same test within 30 seconds of badge creation
+          const matchingAttempt = attemptsData?.find(attempt => 
+            attempt.test_id === badge.test_id &&
+            Math.abs(new Date(attempt.created_at).getTime() - badgeTime) < 30000 // 30 second window
+          );
+          
+          if (matchingAttempt) {
+            badgeAttemptIds.add(matchingAttempt.id);
+            console.log(`Badge ${badge.id} matched to attempt ${matchingAttempt.id} (test: ${badge.test_id})`);
+          } else {
+            console.warn(`No matching attempt found for badge ${badge.id} (test: ${badge.test_id})`);
+          }
+        });
+        
+        // Filter out attempts that earned badges
+        const practiceOnlyAttempts = (attemptsData || [])
+          .filter(attempt => !badgeAttemptIds.has(attempt.id))
           .map(attempt => ({
             ...attempt,
             test: testsData?.find(t => t.id === attempt.test_id)
           }));
 
         console.log('Total attempts:', attemptsData?.length);
-        console.log('All attempts shown:', practiceAttemptsWithTests.length);
-        console.log('Attempts details:', practiceAttemptsWithTests);
+        console.log('Badge attempts (excluded from practice):', badgeAttemptIds.size);
+        console.log('Badge attempt IDs excluded:', Array.from(badgeAttemptIds));
+        console.log('Practice-only attempts shown:', practiceOnlyAttempts.length);
+        console.log('Practice attempts details:', practiceOnlyAttempts);
         console.log('Badges:', badgesWithTests.length);
 
         // Group by company
@@ -127,8 +164,8 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
           grouped.get(company)!.badges.push(badge);
         });
 
-        // Add practice attempts to groups
-        practiceAttemptsWithTests.forEach(attempt => {
+        // Add practice-only attempts to groups
+        practiceOnlyAttempts.forEach(attempt => {
           const company = attempt.test?.company || 'Independent';
           if (!grouped.has(company)) {
             grouped.set(company, {
@@ -169,39 +206,38 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
   const retryMintNFT = async (badge: BadgeWithTest) => {
     try {
       setMintingBadgeId(badge.id);
-      console.log('🔄 Retrying NFT mint for badge via backend:', badge.id);
+      console.log('Retrying NFT mint for badge on blockchain:', badge.id);
 
-      // Mint the NFT via backend (backend handles metadata generation and upload)
-      const mintResult = await mintNFTViaBackend(
+      const mintResult = await mintNFTOnBlockchain(
         walletAddress,
         badge.test_id,
         badge.test?.title || 'Achievement Badge',
-        0, // Score not available here, use 0 or fetch from attempts
+        0, // Score not available here
         0
       );
 
-      console.log('✅ Badge NFT minted:', mintResult);
+      console.log('Badge NFT minted:', mintResult);
 
       // Update badge record with blockchain data
       const { error: updateError } = await supabase
         .from('badges')
         .update({
-          nft_token_id: mintResult.data.tokenId,
-          mint_tx_hash: mintResult.data.txHash,
-          metadata_url: mintResult.data.metadataUrl,
+          nft_token_id: `badge_${badge.test_id}_${Date.now()}`,
+          mint_tx_hash: mintResult.txHash,
+          metadata_url: mintResult.metadataUrl,
         })
         .eq('id', badge.id);
 
       if (updateError) throw updateError;
 
-      console.log(`🎉 Badge successfully minted! Token ID: ${mintResult.data.tokenId}`);
+      console.log(`Badge successfully minted! TX: ${mintResult.txHash}`);
       
       // Refresh badges to show the updated data
       await fetchUserBadgesAndAttempts();
       
-      alert(`NFT Badge minted successfully! Token ID: ${mintResult.data.tokenId}`);
+      alert(`NFT Badge minted successfully! TX: ${mintResult.txHash}`);
     } catch (err: any) {
-      console.error('❌ Retry mint failed:', err);
+      console.error('Retry mint failed:', err);
       alert(`Failed to mint NFT: ${err.message || 'Unknown error'}`);
     } finally {
       setMintingBadgeId(null);
@@ -409,7 +445,7 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
                     >
                       <p className="text-xs text-gray-600">NFT Status</p>
                       <p className="text-xs font-bold" style={{ color: colors.red }}>
-                        ❌ Minting Failed
+                        Minting Failed
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
                         Click below to retry
@@ -420,7 +456,7 @@ const BadgesTab = ({ walletAddress, onViewTest, onSwitchTab }: BadgesTabProps) =
                         className="w-full mt-2 text-xs py-1 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
                         style={{ backgroundColor: colors.yellow, color: 'black' }}
                       >
-                        {mintingBadgeId === badge.id ? '⏳ Minting...' : '🔄 Retry Mint NFT'}
+                        {mintingBadgeId === badge.id ? 'Minting...' : 'Retry Mint NFT'}
                       </Button>
                     </div>
                   )}

@@ -1,5 +1,9 @@
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
+// Toggle between real blockchain transactions and simulation
+// Set to true to use real Freighter signing, false for simulation
+export const USE_REAL_BLOCKCHAIN = import.meta.env.VITE_USE_REAL_BLOCKCHAIN === 'true' || false;
+
 export interface RegisterTestResponse {
   success: boolean;
   message: string;

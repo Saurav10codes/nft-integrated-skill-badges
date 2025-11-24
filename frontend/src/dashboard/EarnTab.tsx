@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { colors } from '../config/colors';
 import { supabase, type Test } from '../config/supabase';
-import { logContractInfo } from '../utils/sorobanSimple';
+import { logContractInfo, getContractExplorerUrl, formatContractAddress } from '../utils/sorobanSimple';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -15,18 +15,29 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
   const [activeTests, setActiveTests] = useState<Test[]>([]);
   const [upcomingTests, setUpcomingTests] = useState<Test[]>([]);
   const [previousTests, setPreviousTests] = useState<Test[]>([]);
+  const [registeredTests, setRegisteredTests] = useState<Test[]>([]);
   const [filteredActiveTests, setFilteredActiveTests] = useState<Test[]>([]);
   const [filteredUpcomingTests, setFilteredUpcomingTests] = useState<Test[]>([]);
   const [filteredPreviousTests, setFilteredPreviousTests] = useState<Test[]>([]);
+  const [filteredRegisteredTests, setFilteredRegisteredTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [userAttempts, setUserAttempts] = useState<Set<string>>(new Set());
   const [userRegistrations, setUserRegistrations] = useState<Set<string>>(new Set());
+  
+  // Collapsible states
+  const [registeredSectionOpen, setRegisteredSectionOpen] = useState(true);
+  const [activeSectionOpen, setActiveSectionOpen] = useState(true);
+  const [upcomingSectionOpen, setUpcomingSectionOpen] = useState(true);
+  const [previousSectionOpen, setPreviousSectionOpen] = useState(false);
 
   useEffect(() => {
-    fetchTests();
-    fetchUserData();
+    const loadData = async () => {
+      const userRegs = await fetchUserData();
+      await fetchTests(userRegs);
+    };
+    loadData();
     // Log contract info on component mount
     logContractInfo();
   }, [walletAddress]);
@@ -37,6 +48,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
       setFilteredActiveTests(activeTests);
       setFilteredUpcomingTests(upcomingTests);
       setFilteredPreviousTests(previousTests);
+      setFilteredRegisteredTests(registeredTests);
     } else {
       const query = searchQuery.toLowerCase();
       const filterFunc = (test: Test) =>
@@ -47,13 +59,17 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
       setFilteredActiveTests(activeTests.filter(filterFunc));
       setFilteredUpcomingTests(upcomingTests.filter(filterFunc));
       setFilteredPreviousTests(previousTests.filter(filterFunc));
+      setFilteredRegisteredTests(registeredTests.filter(filterFunc));
     }
-  }, [searchQuery, activeTests, upcomingTests, previousTests]);
+  }, [searchQuery, activeTests, upcomingTests, previousTests, registeredTests]);
 
-  const fetchTests = async () => {
+  const fetchTests = async (userRegs?: Set<string>) => {
     try {
       setLoading(true);
       const now = new Date().toISOString();
+      
+      // Use provided registrations or fall back to state
+      const registrations = userRegs || userRegistrations;
 
       // Fetch all tests
       const { data, error } = await supabase
@@ -108,24 +124,33 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
       const active: Test[] = [];
       const upcoming: Test[] = [];
       const previous: Test[] = [];
+      const registered: Test[] = [];
 
       testsWithQuestionCounts.forEach((test) => {
         const startTime = new Date(test.start_time);
         const endTime = new Date(test.end_time);
         const currentTime = new Date(now);
+        
+        // Check if user is registered for this test
+        const isRegistered = registrations.has(test.id);
+        console.log(`Test "${test.title}" (ID: ${test.id}): isRegistered = ${isRegistered}`);
 
-        // Check if test is currently active
-        if (currentTime >= startTime && currentTime <= endTime) {
-          active.push(test);
-          console.log(`✅ Active test: "${test.title}" (${test.start_time} to ${test.end_time})`);
-        } else if (currentTime < startTime) {
-          // Test hasn't started yet
-          upcoming.push(test);
-          console.log(`⏳ Upcoming test: "${test.title}" (starts ${test.start_time})`);
+        // If registered, only add to registered section
+        if (isRegistered) {
+          registered.push(test);
+          console.log(`✓ Registered test: "${test.title}"`);
         } else {
-          // Test has ended
-          previous.push(test);
-          console.log(`⏱️ Previous test: "${test.title}" (ended ${test.end_time})`);
+          // Not registered - categorize by timing
+          if (currentTime >= startTime && currentTime <= endTime) {
+            active.push(test);
+            console.log(`Active test: "${test.title}" (${test.start_time} to ${test.end_time})`);
+          } else if (currentTime < startTime) {
+            upcoming.push(test);
+            console.log(`Upcoming test: "${test.title}" (starts ${test.start_time})`);
+          } else {
+            previous.push(test);
+            console.log(`Previous test: "${test.title}" (ended ${test.end_time})`);
+          }
         }
       });
 
@@ -137,16 +162,21 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
 
       // Limit previous tests to top 20 by registration count
       const topPrevious = previous.slice(0, 20);
+      
+      // Sort registered tests by start time
+      registered.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 
       setActiveTests(active);
       setUpcomingTests(upcoming);
       setPreviousTests(topPrevious);
+      setRegisteredTests(registered);
       setFilteredActiveTests(active);
       setFilteredUpcomingTests(upcoming);
       setFilteredPreviousTests(topPrevious);
+      setFilteredRegisteredTests(registered);
 
-      console.log(`📊 Found ${active.length} active, ${upcoming.length} upcoming, and ${topPrevious.length} previous tests (showing top 20)`);
-      console.log(`👤 Current user wallet: ${walletAddress}`);
+      console.log(`Found ${active.length} active, ${upcoming.length} upcoming, ${topPrevious.length} previous, and ${registered.length} registered tests`);
+      console.log(`Current user wallet: ${walletAddress}`);
     } catch (err: any) {
       console.error('Error fetching tests:', err);
       setError(err.message || 'Failed to load tests');
@@ -155,8 +185,10 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
     }
   };
 
-  const fetchUserData = async () => {
+  const fetchUserData = async (): Promise<Set<string>> => {
     try {
+      console.log('Fetching user data for wallet:', walletAddress);
+      
       // Fetch user's attempts to check which tests they've already taken
       const { data: attemptsData } = await supabase
         .from('attempts')
@@ -165,19 +197,32 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
 
       if (attemptsData) {
         setUserAttempts(new Set(attemptsData.map(a => a.test_id)));
+        console.log('User attempts:', attemptsData);
       }
 
       // Fetch user's registrations
-      const { data: regsData } = await supabase
+      const { data: regsData, error: regsError } = await supabase
         .from('test_registrations')
         .select('test_id')
         .eq('wallet_address', walletAddress);
 
+      if (regsError) {
+        console.error('Error fetching registrations:', regsError);
+      }
+
       if (regsData) {
-        setUserRegistrations(new Set(regsData.map(r => r.test_id)));
+        const regSet = new Set(regsData.map(r => r.test_id));
+        setUserRegistrations(regSet);
+        console.log('User registrations data:', regsData);
+        console.log('User registrations Set:', Array.from(regSet));
+        return regSet; // Return the fresh Set
+      } else {
+        console.log('No registration data found');
+        return new Set(); // Return empty Set
       }
     } catch (err) {
       console.error('Error fetching user data:', err);
+      return new Set(); // Return empty Set on error
     }
   };
 
@@ -210,8 +255,8 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
       }
 
       // Refresh data
-      await fetchTests();
-      await fetchUserData();
+      const userRegs = await fetchUserData();
+      await fetchTests(userRegs);
       
       alert('Successfully registered for the test!');
     } catch (err: any) {
@@ -281,6 +326,18 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
                   By {test.company}
                 </p>
               )}
+              {test.contract_address && (
+                <button
+                  onClick={() => window.open(getContractExplorerUrl(test.contract_address!), '_blank')}
+                  className="text-xs font-mono font-medium mb-1.5 px-2 py-1 border-2 border-black rounded-base bg-white hover:bg-gray-50 transition-colors inline-flex items-center gap-1"
+                  style={{ color: colors.purple }}
+                >
+                  <span>Contract: {formatContractAddress(test.contract_address)}</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
+              )}
               <p className="text-sm text-gray-700 mb-2">
                 {test.description || 'No description available'}
               </p>
@@ -306,7 +363,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
           </div>
 
           {/* Statistics - Simplified with unified color */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div
               className="p-1.5 text-center border-2 border-black rounded-base"
               style={{ backgroundColor: colors.white }}
@@ -324,6 +381,16 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
               <p className="text-xs text-gray-600">Pass Score</p>
               <p className="font-bold text-sm" style={{ color: status === 'active' ? colors.purple : status === 'upcoming' ? colors.yellow : colors.pink }}>
                 {test.pass_score}%
+              </p>
+            </div>
+
+            <div
+              className="p-1.5 text-center border-2 border-black rounded-base"
+              style={{ backgroundColor: colors.white }}
+            >
+              <p className="text-xs text-gray-600">Registered</p>
+              <p className="font-bold text-sm" style={{ color: status === 'active' ? colors.purple : status === 'upcoming' ? colors.yellow : colors.pink }}>
+                {test.registration_count || 0}
               </p>
             </div>
 
@@ -376,7 +443,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
                   color: colors.green,
                 }}
               >
-                ✓ Already Completed
+                Already Completed
               </div>
             ) : (
               <Button
@@ -408,7 +475,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
                 {status === 'active' 
                   ? 'Take Test & Earn Badge' 
                   : status === 'upcoming' 
-                    ? (userRegistrations.has(test.id) ? '✓ Registered' : 'Register for Test')
+                    ? (userRegistrations.has(test.id) ? 'Registered' : 'Register for Test')
                     : 'Take for Practice (No Badge)'}
               </Button>
             )}
@@ -443,7 +510,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
     );
   }
 
-  const totalTests = filteredActiveTests.length + filteredUpcomingTests.length + filteredPreviousTests.length;
+  const totalTests = filteredActiveTests.length + filteredUpcomingTests.length + filteredPreviousTests.length + filteredRegisteredTests.length;
 
   if (totalTests === 0 && !searchQuery) {
     return (
@@ -480,6 +547,7 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
             <div className="mt-3 text-sm font-medium text-gray-700">
               Found <strong>{totalTests}</strong> test{totalTests !== 1 ? 's' : ''}
               {searchQuery && ` matching "${searchQuery}"`}
+              {filteredRegisteredTests.length > 0 && ` (${filteredRegisteredTests.length} registered)`}
               {filteredActiveTests.length > 0 && ` (${filteredActiveTests.length} active)`}
               {filteredUpcomingTests.length > 0 && ` (${filteredUpcomingTests.length} upcoming)`}
               {filteredPreviousTests.length > 0 && ` (${filteredPreviousTests.length} previous)`}
@@ -511,48 +579,93 @@ const EarnTab = ({ walletAddress, onTakeTest }: EarnTabProps) => {
         </Card>
       )}
 
+      {/* My Registered Tests Section */}
+      {filteredRegisteredTests.length > 0 && (
+        <div className="space-y-4">
+          <button
+            onClick={() => setRegisteredSectionOpen(!registeredSectionOpen)}
+            className="w-full px-4 py-3 rounded-base border-2 border-black font-bold text-xl flex items-center justify-between transition-all hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            style={{ backgroundColor: colors.greenLight, color: colors.green }}
+          >
+            <span>My Registered Tests ({filteredRegisteredTests.length})</span>
+            <span className="text-2xl transition-transform duration-200" style={{ transform: registeredSectionOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              ▶
+            </span>
+          </button>
+          {registeredSectionOpen && (
+            <div className="space-y-4">
+              {filteredRegisteredTests.map((test) => {
+                const now = new Date();
+                const startTime = new Date(test.start_time);
+                const endTime = new Date(test.end_time);
+                const status = now >= startTime && now <= endTime ? 'active' : now < startTime ? 'upcoming' : 'previous';
+                return renderTestCard(test, status);
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Active Tests Section */}
       {filteredActiveTests.length > 0 && (
         <div className="space-y-4">
-          <div
-            className="px-4 py-3 rounded-base border-2 border-black font-bold text-xl"
+          <button
+            onClick={() => setActiveSectionOpen(!activeSectionOpen)}
+            className="w-full px-4 py-3 rounded-base border-2 border-black font-bold text-xl flex items-center justify-between transition-all hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
             style={{ backgroundColor: colors.blueLight, color: colors.blue }}
           >
-            Active Tests ({filteredActiveTests.length})
-          </div>
-          <div className="space-y-4">
-            {filteredActiveTests.map((test) => renderTestCard(test, 'active'))}
-          </div>
+            <span>Active Tests ({filteredActiveTests.length})</span>
+            <span className="text-2xl transition-transform duration-200" style={{ transform: activeSectionOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              ▶
+            </span>
+          </button>
+          {activeSectionOpen && (
+            <div className="space-y-4">
+              {filteredActiveTests.map((test) => renderTestCard(test, 'active'))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Upcoming Tests Section */}
       {filteredUpcomingTests.length > 0 && (
         <div className="space-y-4">
-          <div
-            className="px-4 py-3 rounded-base border-2 border-black font-bold text-xl"
+          <button
+            onClick={() => setUpcomingSectionOpen(!upcomingSectionOpen)}
+            className="w-full px-4 py-3 rounded-base border-2 border-black font-bold text-xl flex items-center justify-between transition-all hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
             style={{ backgroundColor: colors.yellowLight, color: colors.yellow }}
           >
-            Upcoming Tests - Register Now ({filteredUpcomingTests.length})
-          </div>
-          <div className="space-y-4">
-            {filteredUpcomingTests.map((test) => renderTestCard(test, 'upcoming'))}
-          </div>
+            <span>Upcoming Tests - Register Now ({filteredUpcomingTests.length})</span>
+            <span className="text-2xl transition-transform duration-200" style={{ transform: upcomingSectionOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              ▶
+            </span>
+          </button>
+          {upcomingSectionOpen && (
+            <div className="space-y-4">
+              {filteredUpcomingTests.map((test) => renderTestCard(test, 'upcoming'))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Previous Tests Section */}
       {filteredPreviousTests.length > 0 && (
         <div className="space-y-4">
-          <div
-            className="px-4 py-3 rounded-base border-2 border-black font-bold text-xl"
+          <button
+            onClick={() => setPreviousSectionOpen(!previousSectionOpen)}
+            className="w-full px-4 py-3 rounded-base border-2 border-black font-bold text-xl flex items-center justify-between transition-all hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
             style={{ backgroundColor: colors.pinkLight, color: colors.pink }}
           >
-            Previous Tests - Top by Registrations ({filteredPreviousTests.length})
-          </div>
-          <div className="space-y-4">
-            {filteredPreviousTests.map((test) => renderTestCard(test, 'previous'))}
-          </div>
+            <span>Previous Tests - Top by Registrations ({filteredPreviousTests.length})</span>
+            <span className="text-2xl transition-transform duration-200" style={{ transform: previousSectionOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+              ▶
+            </span>
+          </button>
+          {previousSectionOpen && (
+            <div className="space-y-4">
+              {filteredPreviousTests.map((test) => renderTestCard(test, 'previous'))}
+            </div>
+          )}
         </div>
       )}
     </div>

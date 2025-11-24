@@ -34,6 +34,7 @@ export interface Test {
   custom_badge_id?: string;
   custom_badge?: CustomBadge | null;
   metadata_cid?: string;
+  contract_address?: string;
   start_time: string;
   end_time: string;
   pass_score: number;

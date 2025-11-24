@@ -1,12 +1,10 @@
 import express from 'express';
-import { registerTest, mintNFT } from '../controllers/blockchainController';
+import { buildRegisterTestTx, buildMintNFTTx } from '../controllers/blockchainController';
 
 const router = express.Router();
 
-// Register test on blockchain
-router.post('/blockchain/register-test', registerTest);
-
-// Mint NFT badge
-router.post('/blockchain/mint-nft', mintNFT);
+// Real blockchain transaction building endpoints
+router.post('/blockchain/build-register-test-tx', buildRegisterTestTx);
+router.post('/blockchain/build-mint-nft-tx', buildMintNFTTx);
 
 export default router;

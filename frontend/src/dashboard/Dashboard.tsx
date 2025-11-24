@@ -8,7 +8,7 @@ import MyTestsTab from './MyTestsTab';
 import TakeTestTab from './TakeTestTab';
 import ProfileTab from './ProfileTab';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 
 interface User {
   id: string;
@@ -24,7 +24,6 @@ const Dashboard = () => {
   const [account, setAccount] = useState<string>('');
   const [activeMenu, setActiveMenu] = useState<MenuItem>('profile');
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const navigate = useNavigate();
   const { testId } = useParams<{ testId?: string }>();
 
@@ -76,21 +75,6 @@ const Dashboard = () => {
     localStorage.removeItem('stellar_user');
     localStorage.removeItem('stellar_wallet');
     navigate('/');
-  };
-
-  const formatAddress = (address: string) => {
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-  };
-
-  const copyAddressToClipboard = async () => {
-    try {
-      if (!user?.wallet_address) return;
-      await navigator.clipboard.writeText(user.wallet_address);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 1800);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
   };
 
   const handleTakeTest = (testId: string) => {
@@ -239,7 +223,7 @@ const Dashboard = () => {
             <CardContent className="py-2 px-2.5">
               <p className="text-xs font-heading mb-0.5">Wallet</p>
               <p className="font-mono text-xs font-bold break-all">
-                {formatAddress(account)}
+                {`${account.substring(0, 6)}...${account.substring(account.length - 4)}`}
               </p>
             </CardContent>
           </Card>
@@ -281,76 +265,6 @@ const Dashboard = () => {
         <div className="flex-1 overflow-y-auto p-6">
           {activeMenu === 'profile' && (
             <>
-              {/* Welcome Section */}
-              <Card className="mb-4 shadow-shadow" style={{ backgroundColor: colors.cyanLight }}>
-                <CardHeader>
-                  <CardTitle className="text-2xl">Welcome back!</CardTitle>
-                  <CardDescription className="text-base">
-                    You're successfully logged in to your Stellar account.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-
-              {/* User Info Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                {/* Wallet Address Card */}
-                <Card className="shadow-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all" style={{ backgroundColor: colors.blueLight }}>
-                  <CardContent className="py-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-heading">Wallet Address</h4>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={copyAddressToClipboard}
-                        className="h-7 w-7 p-0"
-                      >
-                        {copySuccess ? (
-                          <span className="text-xs">✓</span>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="font-mono text-xs break-all font-bold">
-                      {user.wallet_address}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* Member Since Card */}
-                <Card className="shadow-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all" style={{ backgroundColor: colors.orangeLight }}>
-                  <CardContent className="py-5">
-                    <h4 className="text-sm font-heading mb-2">Member Since</h4>
-                    <p className="font-mono text-sm font-bold">
-                      {new Date(user.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* Last Login Card */}
-                <Card className="shadow-shadow hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all" style={{ backgroundColor: colors.pinkLight }}>
-                  <CardContent className="py-5">
-                    <h4 className="text-sm font-heading mb-2">Last Login</h4>
-                    <p className="font-mono text-sm font-bold">
-                      {new Date(user.last_login).toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Custom Badges Section */}
               <ProfileTab userId={user.id} />
             </>
           )}
